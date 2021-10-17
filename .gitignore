@@ -1,3 +1,10 @@
+# pdf docs
+docs/
+
+# mac
+.DS_Store
+
+# Python .gitignore template
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
