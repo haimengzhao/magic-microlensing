@@ -7,7 +7,6 @@ Script for simulating microlensing lightcurves.
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
-import yaml
 
 import MulensModel as mm
 
@@ -82,18 +81,26 @@ def simulate_lc(
     flux *= 1 + relative_uncertainty * np.random.randn(len(flux))
 
     data = mm.MulensData([times, flux, flux_err], phot_fmt='flux')
-    event = mm.Event([data], model)
-    print("chi^2: {:.2f}".format(event.get_chi2()))
+    # event = mm.Event([data], model)
+    # print("chi^2: {:.2f}".format(event.get_chi2()))
 
-    np.savetxt(file_out,
-               np.array([times, data.mag, data.err_mag]).T,
-               fmt='%.4f')
+    # np.savetxt(file_out,
+    #            np.array([times, data.mag, data.err_mag]).T,
+    #            fmt='%.4f')
 
     if plot:
         model.plot_lc(t_start=np.min(times), t_stop=np.max(times),
                       source_flux=flux_source, blend_flux=flux_blending)
         data.plot(phot_fmt='mag')
         plt.savefig('./test.png')
+
+    single = mm.Model({'t_0': parameters['t_0'], 'u_0': parameters['u_0'], 't_E': parameters['t_E']})
+    event_single = mm.Event([data], single)
+    chi2 = event_single.get_chi2()
+    print("chi^2 single: {:.2f}".format(chi2))
+
+    if chi2 > 1500:
+        return np.array([times, data.mag, data.err_mag]).reshape(1, len(times), 3)
 
 def generate_random_parameter_set(u0_max=1, max_iter=100, t_0=0, t_E=50):
     ''' generate a random set of parameters. '''
@@ -145,8 +152,6 @@ def generate_random_parameter_set(u0_max=1, max_iter=100, t_0=0, t_E=50):
 
 
 if __name__ == '__main__':
-    num,  = sys.argv[1:]
-    
     num_of_points_perlc = 100
     t_0 = 0; t_E = 50; t_start = -2*t_E; t_stop = 2*t_E; 
     relative_uncertainty = 0.01; 
@@ -169,4 +174,4 @@ if __name__ == '__main__':
     
     print(parameters)
 
-    simulate_lc(**settings, plot=True)
+    simulate_lc(**settings, plot=False)
