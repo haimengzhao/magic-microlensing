@@ -11,10 +11,13 @@ import sys
 import MulensModel as mm
 
 import random
+import h5py
+from tqdm import tqdm
+import time 
 
 
 def simulate_lc(
-        parameters, time_settings, file_out,
+        parameters, time_settings,
         coords=None, methods=None,
         flux_source=1000., flux_blending=0.,
         relative_uncertainty=0.01,
@@ -32,9 +35,6 @@ def simulate_lc(
             have one of two values:
             - `random` (requires `n_epochs`, `t_start`, and `t_stop`) or
             - `evenly spaced` (settings passed to `Model.set_times()`).
-
-        file_out: *str*
-            Name of the file to be saved.
 
         coords: *str*
             Event coordinates for parallax calculations, e.g.,
@@ -97,10 +97,12 @@ def simulate_lc(
     single = mm.Model({'t_0': parameters['t_0'], 'u_0': parameters['u_0'], 't_E': parameters['t_E']})
     event_single = mm.Event([data], single)
     chi2 = event_single.get_chi2()
-    print("chi^2 single: {:.2f}".format(chi2))
+    # print("chi^2 single: {:.2f}".format(chi2))
 
     if chi2 > 1500:
         return np.array([times, data.mag, data.err_mag]).reshape(1, len(times), 3)
+    else: 
+        return None
 
 def generate_random_parameter_set(u0_max=1, max_iter=100, t_0=0, t_E=50):
     ''' generate a random set of parameters. '''
@@ -152,26 +154,53 @@ def generate_random_parameter_set(u0_max=1, max_iter=100, t_0=0, t_E=50):
 
 
 if __name__ == '__main__':
-    num_of_points_perlc = 100
+
+    batch_size = int(sys.argv[1])
+    num_of_batch = int(sys.argv[2])
+
+    num_of_points_perlc = 200
     t_0 = 0; t_E = 50; t_start = -2*t_E; t_stop = 2*t_E; 
     relative_uncertainty = 0.01; 
 
-    parameters = generate_random_parameter_set(t_0=t_0, t_E=t_E)
     time_settings = {
-        'type': 'random',
-        'n_epochs': num_of_points_perlc,
-        't_start': t_start,
-        't_stop': t_stop,
-    }
+            'type': 'random',
+            'n_epochs': num_of_points_perlc,
+            't_start': t_start,
+            't_stop': t_stop,
+        }
     methods = [t_start, 'VBBL', t_stop]
 
-    settings = {
-        'parameters': parameters,
-        'time_settings': time_settings,
-        'methods': methods,
-        'file_out': './a.dat'
-    }
-    
-    print(parameters)
+    log = open('./log.txt', 'a')
 
-    simulate_lc(**settings, plot=False)
+    for b in tqdm(range(num_of_batch)):
+        time_start = time.time()
+        X = np.empty((batch_size, num_of_points_perlc, 3))
+        Y = np.empty((batch_size, 7), dtype=[
+            ('t_0', '<i4'), ('t_E', '<i4'), ('u_0', '<f8'), 
+            ('rho', '<f8'), ('q', '<f8'), ('s', '<f8'), ('alpha', '<f8')
+            ])
+        num_lc = 0
+
+        while num_lc < batch_size:
+            parameters = generate_random_parameter_set(t_0=t_0, t_E=t_E)
+            Y[num_lc] = list(parameters.values())
+
+            settings = {
+                'parameters': parameters,
+                'time_settings': time_settings,
+                'methods': methods,
+            }
+
+            lc = simulate_lc(**settings, plot=False)
+            if type(lc) == np.ndarray:
+                X[num_lc] = lc
+                num_lc += 1
+
+        with h5py.File(f'/work/hmzhao/irregular-lc/batch-{b}.h5', 'w') as opt:
+            opt['X'] = X
+            opt['Y'] = Y
+        
+        time_end = time.time()
+        log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/batch-{b}.h5, size {batch_size}, use time: {time_end - time_start}s\n')
+
+    log.close()
