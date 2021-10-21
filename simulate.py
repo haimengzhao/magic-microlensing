@@ -4,6 +4,7 @@ and https://github.com/LRayleighJ/MDN_lc_iden/blob/main/simudata/gen_simu.py
 
 Script for simulating microlensing lightcurves.
 """
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -14,6 +15,8 @@ import random
 import h5py
 from tqdm import tqdm
 import time 
+from multiprocessing import Pool
+from functools import partial
 
 
 def simulate_lc(
@@ -150,6 +153,40 @@ def generate_random_parameter_set(u0_max=1, max_iter=100, t_0=0, t_E=50):
         's': s, 
         'alpha': alpha,
     }
+
+def simulate_batch(batch_size, num_of_points_perlc, t_0, t_E, time_settings, methods, log_path, b):
+    log = open(log_path, 'a')
+    time_start = time.time()
+    X = np.empty((batch_size, num_of_points_perlc, 3))
+    Y = np.empty((batch_size, 7), dtype=[
+        ('t_0', '<i4'), ('t_E', '<i4'), ('u_0', '<f8'), 
+        ('rho', '<f8'), ('q', '<f8'), ('s', '<f8'), ('alpha', '<f8')
+        ])
+    num_lc = 0
+
+    while num_lc < batch_size:
+        parameters = generate_random_parameter_set(t_0=t_0, t_E=t_E)
+        Y[num_lc] = list(parameters.values())
+
+        settings = {
+            'parameters': parameters,
+            'time_settings': time_settings,
+            'methods': methods,
+        }
+
+        lc = simulate_lc(**settings, plot=False)
+        if type(lc) == np.ndarray:
+            X[num_lc] = lc
+            num_lc += 1
+
+    with h5py.File(f'/work/hmzhao/irregular-lc/batch-{b}.h5', 'w') as opt:
+        opt['X'] = X
+        opt['Y'] = Y
+    
+    time_end = time.time()
+    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/batch-{b}.h5, size {batch_size}, use time: {time_end - time_start}s\n')
+    log.close()
+
         
 
 
@@ -157,6 +194,8 @@ if __name__ == '__main__':
 
     batch_size = int(sys.argv[1])
     num_of_batch = int(sys.argv[2])
+    num_of_cpus = int(sys.argv[3])
+    log_path = sys.argv[4]
 
     num_of_points_perlc = 200
     t_0 = 0; t_E = 50; t_start = -2*t_E; t_stop = 2*t_E; 
@@ -170,37 +209,10 @@ if __name__ == '__main__':
         }
     methods = [t_start, 'VBBL', t_stop]
 
-    log = open('./log/log.txt', 'w')
-
-    for b in tqdm(range(num_of_batch)):
-        time_start = time.time()
-        X = np.empty((batch_size, num_of_points_perlc, 3))
-        Y = np.empty((batch_size, 7), dtype=[
-            ('t_0', '<i4'), ('t_E', '<i4'), ('u_0', '<f8'), 
-            ('rho', '<f8'), ('q', '<f8'), ('s', '<f8'), ('alpha', '<f8')
-            ])
-        num_lc = 0
-
-        while num_lc < batch_size:
-            parameters = generate_random_parameter_set(t_0=t_0, t_E=t_E)
-            Y[num_lc] = list(parameters.values())
-
-            settings = {
-                'parameters': parameters,
-                'time_settings': time_settings,
-                'methods': methods,
-            }
-
-            lc = simulate_lc(**settings, plot=False)
-            if type(lc) == np.ndarray:
-                X[num_lc] = lc
-                num_lc += 1
-
-        with h5py.File(f'/work/hmzhao/irregular-lc/batch-{b}.h5', 'w') as opt:
-            opt['X'] = X
-            opt['Y'] = Y
-        
-        time_end = time.time()
-        log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/batch-{b}.h5, size {batch_size}, use time: {time_end - time_start}s\n')
-
+    log = open(log_path, 'w')
+    log.write(f'Simulating {num_of_batch} batches of {batch_size} lightcurves\n'+'#'*20+'\n')
     log.close()
+
+    pool = Pool(num_of_cpus)
+    pool.map(partial(simulate_batch, batch_size, num_of_points_perlc, t_0, t_E, time_settings, methods, log_path), 
+    range(num_of_batch))
