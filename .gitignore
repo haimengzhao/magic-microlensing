@@ -1,5 +1,6 @@
 # log
-log.txt
+log/
+*.o*
 
 # pdf docs
 docs/

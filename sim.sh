@@ -1,11 +1,11 @@
 #!/bin/bash
 #PBS -N simulate-data
-#PBS -lselect=1:ncpus=2:mem=64gb
-#PBS -o /home/hmzhao/latent-ode-microlensing/oe/
-#PBS -e /home/zerui603/MDN_lc/log/latent-ode-microlensing/oe/
+#PBS -lselect=1:ncpus=20:mem=64gb
+#PBS -j oe
 
 cd $PBS_O_WORKDIR
 
+source /opt/miniconda3/etc/profile.d/conda.sh
 conda activate ode-rnn
 
 python simulate.py 100000 5

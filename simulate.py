@@ -170,7 +170,7 @@ if __name__ == '__main__':
         }
     methods = [t_start, 'VBBL', t_stop]
 
-    log = open('./log.txt', 'a')
+    log = open('./log/log.txt', 'w')
 
     for b in tqdm(range(num_of_batch)):
         time_start = time.time()
