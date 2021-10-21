@@ -103,7 +103,7 @@ def simulate_lc(
     # print("chi^2 single: {:.2f}".format(chi2))
 
     if chi2 > 1500:
-        return np.array([times, data.mag, data.err_mag]).reshape(1, len(times), 3)
+        return np.stack([times, data.mag, data.err_mag], axis=-1).reshape(1, -1, 3)
     else: 
         return None
 
@@ -155,6 +155,9 @@ def generate_random_parameter_set(u0_max=1, max_iter=100, t_0=0, t_E=50):
     }
 
 def simulate_batch(batch_size, num_of_points_perlc, t_0, t_E, time_settings, methods, log_path, b):
+    '''
+    simulate a batch of lightcurves
+    '''
     log = open(log_path, 'a')
     time_start = time.time()
     X = np.empty((batch_size, num_of_points_perlc, 3))
@@ -164,6 +167,8 @@ def simulate_batch(batch_size, num_of_points_perlc, t_0, t_E, time_settings, met
         ])
     num_lc = 0
 
+    print(f'Simulating batch {b}:\n' + '#'*50 + '\n')
+    pbar = tqdm(total=100)
     while num_lc < batch_size:
         parameters = generate_random_parameter_set(t_0=t_0, t_E=t_E)
         Y[num_lc] = list(parameters.values())
@@ -178,7 +183,10 @@ def simulate_batch(batch_size, num_of_points_perlc, t_0, t_E, time_settings, met
         if type(lc) == np.ndarray:
             X[num_lc] = lc
             num_lc += 1
+            if (num_lc / batch_size * 1000) % 10 == 0:
+                pbar.update()
 
+    pbar.close()
     with h5py.File(f'/work/hmzhao/irregular-lc/batch-{b}.h5', 'w') as opt:
         opt['X'] = X
         opt['Y'] = Y
