@@ -8,4 +8,4 @@ cd $PBS_O_WORKDIR
 source /opt/miniconda3/etc/profile.d/conda.sh
 conda activate ode-rnn
 
-python simulate.py 100000 5 1 20 ./log/log.txt
+python simulate.py 100000 5 1 ./log/log.txt

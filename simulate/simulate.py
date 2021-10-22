@@ -68,7 +68,9 @@ def simulate_lc(
         dt = time_settings['t_stop'] - time_settings['t_start']
         times = time_settings['t_start'] + np.sort(raw) * dt
     elif time_settings['type'] == 'evenly spaced':
-        times = model.set_times(**time_settings)
+        times = model.set_times(t_start=time_settings['t_start'],
+                                    t_stop=time_settings['t_stop'],
+                                    n_epochs=time_settings['n_epochs'])
     else:
         raise ValueError("unrecognized time_settings['type']: " +
                          time_settings['type'])
@@ -97,15 +99,18 @@ def simulate_lc(
         data.plot(phot_fmt='mag')
         plt.savefig('./test.png')
 
-    single = mm.Model({'t_0': parameters['t_0'], 'u_0': parameters['u_0'], 't_E': parameters['t_E']})
-    event_single = mm.Event([data], single)
-    chi2 = event_single.get_chi2()
-    # print("chi^2 single: {:.2f}".format(chi2))
+    if time_settings['type'] == 'random':
+        single = mm.Model({'t_0': parameters['t_0'], 'u_0': parameters['u_0'], 't_E': parameters['t_E']})
+        event_single = mm.Event([data], single)
+        chi2 = event_single.get_chi2()
+        # print("chi^2 single: {:.2f}".format(chi2))
 
-    if chi2 > 1500:
-        return np.stack([times, data.mag, data.err_mag], axis=-1).reshape(1, -1, 3)
-    else: 
-        return None
+        if chi2 > 1500:
+            return np.stack([times, data.mag, data.err_mag], axis=-1).reshape(1, -1, 3)
+        else: 
+            return None
+    else:
+        return np.stack([times, data.mag], axis=-1).reshape(1, -1, 2)
 
 def generate_random_parameter_set(u0_max=1, max_iter=100, t_0=0, t_E=50):
     ''' generate a random set of parameters. '''
@@ -154,13 +159,23 @@ def generate_random_parameter_set(u0_max=1, max_iter=100, t_0=0, t_E=50):
         'alpha': alpha,
     }
 
-def simulate_batch(batch_size, num_of_points_perlc, t_0, t_E, time_settings, methods, log_path, num_resample, b):
+def simulate_batch(batch_size, t_0, t_E, relative_uncertainty, time_settings_random, time_settings_even, methods, log_path, b):
     '''
-    simulate a batch of lightcurves
+    Simulate a batch of lightcurves
+
+    Save to file:
+
+        X_random: randomly sampled lightcurve
+
+        X_even: evenly densely sampled lightcurve, as ground truth lightcurve
+
+        Y: parameters
+
     '''
     log = open(log_path, 'a')
     time_start = time.time()
-    X = np.empty((batch_size, num_of_points_perlc, 3))
+    X_random = np.empty((batch_size, time_settings_random['n_epochs'], 3))
+    X_even = np.empty((batch_size, time_settings_even['n_epochs'], 2))
     Y = np.empty((batch_size, 7), dtype=[
         ('t_0', '<i4'), ('t_E', '<i4'), ('u_0', '<f8'), 
         ('rho', '<f8'), ('q', '<f8'), ('s', '<f8'), ('alpha', '<f8')
@@ -173,36 +188,50 @@ def simulate_batch(batch_size, num_of_points_perlc, t_0, t_E, time_settings, met
         parameters = generate_random_parameter_set(t_0=t_0, t_E=t_E)
         Y[num_lc] = list(parameters.values())
 
-        settings = {
+        settings_random = {
             'parameters': parameters,
-            'time_settings': time_settings,
+            'time_settings': time_settings_random,
             'methods': methods,
         }
 
-        lc = simulate_lc(**settings, plot=False)
-        if type(lc) == np.ndarray:
-            X[num_lc] = lc
+        settings_even = {
+            'parameters': parameters,
+            'time_settings': time_settings_even,
+            'methods': methods,
+        }
+
+        lc_random = simulate_lc(**settings_random, relative_uncertainty=relative_uncertainty, plot=False)
+        if type(lc_random) == np.ndarray:
+            lc_even = simulate_lc(**settings_even, relative_uncertainty=0, plot=False)
+            X_random[num_lc] = lc_random
+            X_even[num_lc] = lc_even
             num_lc += 1
 
-            if num_resample > 0:
-                for i in range(num_resample - 1):
-                    if (num_lc / batch_size * 1000) % 10 == 0:
-                        pbar.update()
-                    Y[num_lc] = list(parameters.values())
-                    lc = simulate_lc(**settings, plot=False)
-                    X[num_lc] = lc
-                    num_lc += 1
-            else:
-                if (num_lc / batch_size * 1000) % 10 == 0:
+            # ABANDONED: resample
+            # if num_resample > 0:
+            #     for i in range(num_resample - 1):
+            #         if (num_lc / batch_size * 1000) % 10 == 0:
+            #             pbar.update()
+            #         Y[num_lc] = list(parameters.values())
+            #         lc = simulate_lc(**settings, plot=False)
+            #         X[num_lc] = lc
+            #         num_lc += 1
+            # else:
+            #     if (num_lc / batch_size * 1000) % 10 == 0:
+            #         pbar.update()
+
+            if (num_lc / batch_size * 1000) % 10 == 0:
                     pbar.update()
 
     pbar.close()
-    with h5py.File(f'/work/hmzhao/irregular-lc/resample-{num_of_resample}-batch-{b}.h5', 'w') as opt:
-        opt['X'] = X
+
+    with h5py.File(f'/work/hmzhao/irregular-lc/random-even-batch-{b}.h5', 'w') as opt:
+        opt['X_random'] = X_random
+        opt['X_even'] = X_even
         opt['Y'] = Y
     
     time_end = time.time()
-    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/resample-{num_of_resample}-batch-{b}.h5, size {batch_size}, use time: {time_end - time_start}s\n')
+    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/random-even-batch-{b}.h5, size {batch_size}, use time: {time_end - time_start}s\n')
     log.close()
 
         
@@ -213,16 +242,23 @@ if __name__ == '__main__':
     batch_size = int(sys.argv[1])
     num_of_batch = int(sys.argv[2])
     num_of_cpus = int(sys.argv[3])
-    num_of_resample = int(sys.argv[4])
-    log_path = sys.argv[5]
+    # num_of_resample = int(sys.argv[4])
+    log_path = sys.argv[4]
 
-    num_of_points_perlc = 200
+    num_of_points_perlc_random = 200
+    num_of_points_perlc_even = 1000
     t_0 = 0; t_E = 50; t_start = -2*t_E; t_stop = 2*t_E; 
     relative_uncertainty = 0.01; 
 
-    time_settings = {
+    time_settings_random = {
             'type': 'random',
-            'n_epochs': num_of_points_perlc,
+            'n_epochs': num_of_points_perlc_random,
+            't_start': t_start,
+            't_stop': t_stop,
+        }
+    time_settings_even = {
+            'type': 'evenly spaced',
+            'n_epochs': num_of_points_perlc_even,
             't_start': t_start,
             't_stop': t_stop,
         }
@@ -233,5 +269,7 @@ if __name__ == '__main__':
     log.close()
 
     pool = Pool(num_of_cpus)
-    pool.map(partial(simulate_batch, batch_size, num_of_points_perlc, t_0, t_E, time_settings, methods, log_path, num_of_resample), 
-    range(num_of_batch))
+    pool.map(partial(simulate_batch, batch_size, t_0, t_E, relative_uncertainty, 
+                        time_settings_random, time_settings_even,
+                        methods, log_path), 
+                range(num_of_batch))
