@@ -154,7 +154,7 @@ def generate_random_parameter_set(u0_max=1, max_iter=100, t_0=0, t_E=50):
         'alpha': alpha,
     }
 
-def simulate_batch(batch_size, num_of_points_perlc, t_0, t_E, time_settings, methods, log_path, b):
+def simulate_batch(batch_size, num_of_points_perlc, t_0, t_E, time_settings, methods, log_path, num_resample, b):
     '''
     simulate a batch of lightcurves
     '''
@@ -183,16 +183,26 @@ def simulate_batch(batch_size, num_of_points_perlc, t_0, t_E, time_settings, met
         if type(lc) == np.ndarray:
             X[num_lc] = lc
             num_lc += 1
-            if (num_lc / batch_size * 1000) % 10 == 0:
-                pbar.update()
+
+            if num_resample > 0:
+                for i in range(num_resample - 1):
+                    if (num_lc / batch_size * 1000) % 10 == 0:
+                        pbar.update()
+                    Y[num_lc] = list(parameters.values())
+                    lc = simulate_lc(**settings, plot=False)
+                    X[num_lc] = lc
+                    num_lc += 1
+            else:
+                if (num_lc / batch_size * 1000) % 10 == 0:
+                    pbar.update()
 
     pbar.close()
-    with h5py.File(f'/work/hmzhao/irregular-lc/batch-{b}.h5', 'w') as opt:
+    with h5py.File(f'/work/hmzhao/irregular-lc/resample-{num_of_resample}-batch-{b}.h5', 'w') as opt:
         opt['X'] = X
         opt['Y'] = Y
     
     time_end = time.time()
-    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/batch-{b}.h5, size {batch_size}, use time: {time_end - time_start}s\n')
+    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/resample-{num_of_resample}-batch-{b}.h5, size {batch_size}, use time: {time_end - time_start}s\n')
     log.close()
 
         
@@ -203,7 +213,8 @@ if __name__ == '__main__':
     batch_size = int(sys.argv[1])
     num_of_batch = int(sys.argv[2])
     num_of_cpus = int(sys.argv[3])
-    log_path = sys.argv[4]
+    num_of_resample = int(sys.argv[4])
+    log_path = sys.argv[5]
 
     num_of_points_perlc = 200
     t_0 = 0; t_E = 50; t_start = -2*t_E; t_stop = 2*t_E; 
@@ -222,5 +233,5 @@ if __name__ == '__main__':
     log.close()
 
     pool = Pool(num_of_cpus)
-    pool.map(partial(simulate_batch, batch_size, num_of_points_perlc, t_0, t_E, time_settings, methods, log_path), 
+    pool.map(partial(simulate_batch, batch_size, num_of_points_perlc, t_0, t_E, time_settings, methods, log_path, num_of_resample), 
     range(num_of_batch))
