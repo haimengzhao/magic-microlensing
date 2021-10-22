@@ -176,10 +176,8 @@ def simulate_batch(batch_size, t_0, t_E, relative_uncertainty, time_settings_ran
     time_start = time.time()
     X_random = np.empty((batch_size, time_settings_random['n_epochs'], 3))
     X_even = np.empty((batch_size, time_settings_even['n_epochs'], 2))
-    Y = np.empty((batch_size, 7), dtype=[
-        ('t_0', '<i4'), ('t_E', '<i4'), ('u_0', '<f8'), 
-        ('rho', '<f8'), ('q', '<f8'), ('s', '<f8'), ('alpha', '<f8')
-        ])
+    Y = np.empty((batch_size, 7))
+    # t_0, t_E, u_0, rho, q, s, alpha
     num_lc = 0
 
     print(f'Simulating batch {b}:\n' + '#'*50 + '\n')
