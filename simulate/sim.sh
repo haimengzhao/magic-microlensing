@@ -1,6 +1,6 @@
 #!/bin/bash
 #PBS -N simulate
-#PBS -lselect=1:ncpus=20:mem=2gb
+#PBS -lselect=1:ncpus=20:mem=16gb
 #PBS -j oe
 
 cd $PBS_O_WORKDIR

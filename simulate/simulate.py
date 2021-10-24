@@ -237,6 +237,8 @@ def simulate_batch(batch_size, t_0, t_E, relative_uncertainty, time_settings_ran
 
 if __name__ == '__main__':
 
+    print('#'*50+f'\nSimulation program start at {time.time()}\n'+'#'*50)
+
     batch_size = int(sys.argv[1])
     num_of_batch = int(sys.argv[2])
     num_of_cpus = int(sys.argv[3])
@@ -271,3 +273,5 @@ if __name__ == '__main__':
                         time_settings_random, time_settings_even,
                         methods, log_path), 
                 range(num_of_batch))
+
+    print('#'*50+f'\nSimulation program end at {time.time()}\n'+'#'*50)
