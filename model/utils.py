@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-def create_net(n_inputs, n_outputs, n_layers = 1, n_units = 100, nonlinear = nn.Tanh):
+def create_net(n_inputs, n_outputs, n_layers = 1, n_units = 100, nonlinear = nn.ReLU):
     '''
     Create a fully connected net:
     
