@@ -216,7 +216,6 @@ def create_LatentODE_model(args, input_dim, z0_prior, obsrv_std, device, n_label
     Modified from https://github.com/YuliaRubanova/latent_ode/blob/master/lib/create_latent_ode_model.py
     '''
     latent_dim = args.latents
-    n_rec_dim = args.rec_dims
     enc_input_dim = int(input_dim) * 2 # we concatenate the mask
     gen_data_dim = input_dim
 
@@ -229,8 +228,7 @@ def create_LatentODE_model(args, input_dim, z0_prior, obsrv_std, device, n_label
     encoder = ODE_RNN_Encoder(latent_dim, enc_input_dim, z0_dim=latent_dim, diffeq_solver=enc_diffeq_solver, 
         n_gru_units = args.gru_units, device = device).to(device)
 
-
-    dec_ode_func_net = utils.create_net(n_rec_dim, n_rec_dim, 
+    dec_ode_func_net = utils.create_net(latent_dim, latent_dim, 
         n_layers = args.gen_layers, n_units = args.units, nonlinear = nn.ReLU)
     dec_ode_func = ODEFunc(ode_func_net = dec_ode_func_net, device = device).to(device)
     
