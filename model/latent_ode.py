@@ -7,7 +7,13 @@ from torch.distributions import kl_divergence
 import utils
 from likelihood_eval import masked_gaussian_log_density, compute_mse
 
+from encoder_decoder import ODE_RNN_Encoder, Decoder
+from neural_ode import DiffeqSolver, ODEFunc
+
 def create_regression_model(z0_dim, n_labels):
+    '''
+    Create a network for regression task
+    '''
     return nn.Sequential(
             nn.Linear(z0_dim, 300),
             nn.ReLU(),
@@ -16,14 +22,17 @@ def create_regression_model(z0_dim, n_labels):
             nn.Linear(300, n_labels),)
 
 class VAE_Baseline(nn.Module):
-    def __init__(self, input_dim, latent_dim, 
+    '''
+    VAE Base Model
+
+    Modified from https://github.com/YuliaRubanova/latent_ode/blob/master/lib/base_models.py
+    '''
+    def __init__(self, latent_dim,
         z0_prior, device,
         obsrv_std = 0.01, n_labels=7):
 
         super(VAE_Baseline, self).__init__()
 
-        self.input_dim = input_dim
-        self.latent_dim = latent_dim
         self.device = device
 
         self.obsrv_std = torch.Tensor([obsrv_std]).to(device)
@@ -107,7 +116,7 @@ class VAE_Baseline(nn.Module):
             mask = batch_dict["mask_predicted_data"])
 
         reg_loss = self.get_mse(
-            batch_dict['Y'], info['Y']
+            batch_dict['regression_to_predict'], info['regression_predicted']
         )
 
 
@@ -127,6 +136,121 @@ class VAE_Baseline(nn.Module):
         results["std_first_p"] = torch.mean(fp_std).detach()
 
         return results
+
+class LatentODE(VAE_Baseline):
+    '''
+    The Latent-ODE Model
+
+    VAE with ODE-RNN as encoder, and another ODE + Decoder as decoder.
+
+    Modified from https://github.com/YuliaRubanova/latent_ode/blob/master/lib/latent_ode.py
+    '''
+    def __init__(self, latent_dim, encoder, decoder, diffeq_solver, 
+        z0_prior, device, obsrv_std = None, 
+        n_labels = 7):
+
+        super(LatentODE, self).__init__(
+            latent_dim=latent_dim,
+            z0_prior = z0_prior, 
+            device = device, obsrv_std = obsrv_std, 
+            n_labels = n_labels)
+
+        self.encoder = encoder
+        self.diffeq_solver = diffeq_solver
+        self.decoder = decoder
+
+    def get_reconstruction(self, time_steps_to_predict, truth, truth_time_steps, 
+        mask = None, n_traj_samples = 1, run_backwards = True):
+
+        if isinstance(self.encoder, ODE_RNN_Encoder):
+            truth_w_mask = truth
+            if mask is not None:
+                truth_w_mask = torch.cat((truth, mask), -1)
+            initial_mu, initial_sigma = self.encoder(
+                truth_w_mask, truth_time_steps, run_backwards = run_backwards)
+
+            mean_z0 = initial_mu.repeat(n_traj_samples, 1, 1)
+            sigma_z0 = initial_sigma.repeat(n_traj_samples, 1, 1)
+            initial_value = utils.sample_standard_gaussian(mean_z0, sigma_z0)
+
+        else:
+            raise Exception("Unknown encoder type {}".format(type(self.encoder).__name__))
+        
+        initial_sigma = initial_sigma.abs()
+        assert(torch.sum(initial_sigma < 0) == 0.)
+            
+        assert(not torch.isnan(time_steps_to_predict).any())
+        assert(not torch.isnan(initial_sigma).any())
+        assert(not torch.isnan(initial_mu).any())
+
+        # Shape of sol_y [n_traj_samples, n_samples, n_timepoints, n_latents]
+        sol_y = self.diffeq_solver(initial_value, time_steps_to_predict)
+
+        pred_x = self.decoder(sol_y)
+
+        all_extra_info = {
+            "first_point": (initial_mu, initial_sigma, initial_value),
+            "latent_traj": sol_y.detach()
+        }
+
+        all_extra_info["regression_predicted"] = self.regression_model(initial_value).squeeze(-1)
+
+        return pred_x, all_extra_info
+
+
+    def sample_traj_from_prior(self, time_steps_to_predict, n_traj_samples = 1):
+        # Sample z0 from prior
+        starting_point_enc = self.z0_prior.sample([n_traj_samples, 1, self.latent_dim]).squeeze(-1)
+
+        starting_point_enc_aug = starting_point_enc
+
+        sol_y = self.diffeq_solver.sample_traj_from_prior(starting_point_enc_aug, time_steps_to_predict, 
+            n_traj_samples = 3)
+
+        return self.decoder(sol_y)
+
+def create_LatentODE_model(args, input_dim, z0_prior, obsrv_std, device, n_labels=7):
+    '''
+    Create a Latent ODE model
+
+    Modified from https://github.com/YuliaRubanova/latent_ode/blob/master/lib/create_latent_ode_model.py
+    '''
+    latent_dim = args.latents
+    n_rec_dim = args.rec_dims
+    enc_input_dim = int(input_dim) * 2 # we concatenate the mask
+    gen_data_dim = input_dim
+
+    enc_ode_func_net = utils.create_net(latent_dim, latent_dim, 
+        n_layers = args.rec_layers, n_units = args.units, nonlinear = nn.ReLU)
+    enc_ode_func = ODEFunc(ode_func_net = enc_ode_func_net, device = device).to(device)
+    enc_diffeq_solver = DiffeqSolver(enc_ode_func, "dopri5",
+        odeint_rtol = 1e-3, odeint_atol = 1e-4, device = device)
+
+    encoder = ODE_RNN_Encoder(latent_dim, enc_input_dim, z0_dim=latent_dim, diffeq_solver=enc_diffeq_solver, 
+        n_gru_units = args.gru_units, device = device).to(device)
+
+
+    dec_ode_func_net = utils.create_net(n_rec_dim, n_rec_dim, 
+        n_layers = args.gen_layers, n_units = args.units, nonlinear = nn.ReLU)
+    dec_ode_func = ODEFunc(ode_func_net = dec_ode_func_net, device = device).to(device)
+    
+    decoder = Decoder(args.latents, gen_data_dim).to(device)
+
+    diffeq_solver = DiffeqSolver(dec_ode_func, 'dopri5', 
+        odeint_rtol = 1e-3, odeint_atol = 1e-4, device = device)
+
+    model = LatentODE(
+        latent_dim = latent_dim,
+        encoder = encoder, 
+        decoder = decoder, 
+        diffeq_solver = diffeq_solver, 
+        z0_prior = z0_prior, 
+        device = device,
+        obsrv_std = obsrv_std,
+        n_labels = n_labels,
+        ).to(device)
+
+    return model
 
 
 

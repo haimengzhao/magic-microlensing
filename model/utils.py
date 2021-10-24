@@ -14,9 +14,9 @@ def create_net(n_inputs, n_outputs, n_layers = 1, n_units = 100, nonlinear = nn.
         layers.append(nonlinear())
         layers.append(nn.Linear(n_units, n_units))
 
-	layers.append(nonlinear())
-	layers.append(nn.Linear(n_units, n_outputs))
-	return nn.Sequential(*layers)
+    layers.append(nonlinear())
+    layers.append(nn.Linear(n_units, n_outputs))
+    return nn.Sequential(*layers)
 
 def init_network_weights(net, std = 0.1):
     '''
@@ -55,3 +55,16 @@ def split_last_dim(data):
     if len(data.size()) == 2:
         res = data[:,:last_dim], data[:,last_dim:]
     return res
+
+def sample_standard_gaussian(mu, sigma):
+    '''
+    Sample from a gaussian given mu and sigma.
+
+    From https://github.com/YuliaRubanova/latent_ode/blob/master/lib/utils.py
+    '''
+    device = get_device(mu)
+
+    d = torch.distributions.normal.Normal(torch.Tensor([0.]).to(device), torch.Tensor([1.]).to(device))
+    r = d.sample(mu.size()).squeeze(-1)
+    return r * sigma.float() + mu.float()
+
