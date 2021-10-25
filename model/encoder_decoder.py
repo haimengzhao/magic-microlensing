@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-import utils
+import model.utils as utils
 
 class GRU_Unit(nn.Module):
     '''
@@ -48,7 +48,7 @@ class GRU_Unit(nn.Module):
             self.new_state_net  = new_state_net
 
 
-    def forward(self, y_mean, y_std, x, masked_update = True):
+    def forward(self, y_mean, y_std, x, masked_update = False):
         y_concat = torch.cat([y_mean, y_std, x], -1)
 
         update_gate = self.update_gate(y_concat)
@@ -166,7 +166,6 @@ class ODE_RNN_Encoder(nn.Module):
     def run_odernn(self, data, time_steps, 
         run_backwards = True, save_info = False):
         # IMPORTANT: assumes that 'data' already has mask concatenated to it 
-
         n_traj, n_tp, n_dims = data.size()
         extra_info = []
 
@@ -182,7 +181,7 @@ class ODE_RNN_Encoder(nn.Module):
         prev_t, t_i = time_steps[-1] + 0.01,  time_steps[-1]
 
         interval_length = time_steps[-1] - time_steps[0]
-        minimum_step = interval_length / 50
+        minimum_step = interval_length / 1000
 
         # print("minimum step: {}".format(minimum_step))
 
@@ -209,7 +208,7 @@ class ODE_RNN_Encoder(nn.Module):
             else:
                 n_intermediate_tp = max(2, ((prev_t - t_i) / minimum_step).int())
 
-                time_points = utils.linspace_vector(prev_t, t_i, n_intermediate_tp)
+                time_points = utils.linspace_vector(prev_t, t_i, n_intermediate_tp).to(device)
                 ode_sol = self.diffeq_solver(prev_y, time_points)
 
                 assert(not torch.isnan(ode_sol).any())
@@ -225,8 +224,12 @@ class ODE_RNN_Encoder(nn.Module):
             
             yi, yi_std = self.GRU_update(yi_ode, prev_std, xi)
 
-            prev_y, prev_std = yi, yi_std			
-            prev_t, t_i = time_steps[i],  time_steps[i-1]
+            prev_y, prev_std = yi, yi_std		
+            if i >= 1:	
+                prev_t, t_i = time_steps[i],  time_steps[i-1]
+            else:
+                break
+            # print(f'i: {i}, prev_t: {prev_t}, t_i: {t_i}')
 
             latent_ys.append(yi)
 

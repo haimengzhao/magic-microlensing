@@ -4,11 +4,11 @@ import torch.nn as nn
 from torch.distributions.normal import Normal
 from torch.distributions import kl_divergence
 
-import utils
-from likelihood_eval import masked_gaussian_log_density, compute_mse
+import model.utils as utils
+from model.likelihood_eval import masked_gaussian_log_density, compute_mse
 
-from encoder_decoder import ODE_RNN_Encoder, Decoder
-from neural_ode import DiffeqSolver, ODEFunc
+from model.encoder_decoder import ODE_RNN_Encoder, Decoder
+from model.neural_ode import DiffeqSolver, ODEFunc
 
 def create_regression_model(z0_dim, n_labels):
     '''
@@ -45,6 +45,8 @@ class VAE_Baseline(nn.Module):
     def get_gaussian_likelihood(self, truth, pred_y, mask = None):
         # pred_y shape [n_traj_samples, n_traj, n_tp, n_dim]
         # truth shape  [n_traj, n_tp, n_dim]
+        if len(truth.shape) == 2:
+            truth = truth.unsqueeze(-1)
         n_traj, n_tp, n_dim = truth.size()
 
         # Compute likelihood of the data under the predictions
@@ -64,6 +66,8 @@ class VAE_Baseline(nn.Module):
     def get_mse(self, truth, pred_y, mask = None):
         # pred_y shape [n_traj_samples, n_traj, n_tp, n_dim]
         # truth shape  [n_traj, n_tp, n_dim]
+        if len(truth.shape) == 2:
+            truth = truth.unsqueeze(-1)
         n_traj, n_tp, n_dim = truth.size()
 
         # Compute likelihood of the data under the predictions
@@ -83,8 +87,7 @@ class VAE_Baseline(nn.Module):
         # Make predictions for all the points
         pred_y, info = self.get_reconstruction(batch_dict["tp_to_predict"], 
             batch_dict["observed_data"], batch_dict["observed_tp"], 
-            mask = batch_dict["observed_mask"], n_traj_samples = n_traj_samples,
-            mode = batch_dict["mode"])
+            mask = batch_dict["observed_mask"], n_traj_samples = n_traj_samples)
 
         #print("get_reconstruction done -- computing likelihood")
         fp_mu, fp_std, fp_enc = info["first_point"]
@@ -115,9 +118,9 @@ class VAE_Baseline(nn.Module):
             batch_dict["data_to_predict"], pred_y,
             mask = batch_dict["mask_predicted_data"])
 
-        reg_loss = self.get_mse(
-            batch_dict['regression_to_predict'], info['regression_predicted']
-        )
+        reg_loss = torch.sum(
+            (batch_dict['regression_to_predict'] - info['regression_predicted'])**2,
+        ) / len(batch_dict['regression_to_predict'])
 
 
         # IWAE loss
@@ -209,15 +212,15 @@ class LatentODE(VAE_Baseline):
 
         return self.decoder(sol_y)
 
-def create_LatentODE_model(args, input_dim, z0_prior, obsrv_std, device, n_labels=7):
+def create_LatentODE_model(args, input_dim, output_dim, z0_prior, obsrv_std, device, n_labels=7):
     '''
     Create a Latent ODE model
 
     Modified from https://github.com/YuliaRubanova/latent_ode/blob/master/lib/create_latent_ode_model.py
     '''
     latent_dim = args.latents
-    enc_input_dim = int(input_dim) * 2 # we concatenate the mask
-    gen_data_dim = input_dim
+    enc_input_dim = int(input_dim)
+    gen_data_dim = output_dim
 
     enc_ode_func_net = utils.create_net(latent_dim, latent_dim, 
         n_layers = args.rec_layers, n_units = args.units, nonlinear = nn.ReLU)

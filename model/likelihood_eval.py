@@ -6,7 +6,7 @@
 import torch
 import torch.nn as nn
 
-from utils import get_device
+from model.utils import get_device
 
 from torch.distributions.normal import Normal
 from torch.distributions import Independent

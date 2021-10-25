@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import utils
+import model.utils as utils
 
 from torchdiffeq import odeint as odeint
 
@@ -33,16 +33,6 @@ class ODEFunc(nn.Module):
 		if backwards:
 			grad = -grad
 		return grad
-
-	# def get_ode_gradient_nn(self, t_local, y):
-	# 	return self.gradient_net(y)
-
-	# def sample_next_point_from_prior(self, t_local, y):
-	# 	"""
-	# 	t_local: current time point
-	# 	y: value at the current time point
-	# 	"""
-	# 	return self.get_ode_gradient_nn(t_local, y)
 
 
 class DiffeqSolver(nn.Module):

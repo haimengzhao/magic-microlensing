@@ -1,4 +1,7 @@
 # log
+experiments/
+results/
+logs/
 log/
 *.o*
 
