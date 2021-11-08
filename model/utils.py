@@ -28,7 +28,7 @@ def makedirs(dirname):
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-def create_net(n_inputs, n_outputs, n_layers = 1, n_units = 100, nonlinear = nn.ReLU):
+def create_net(n_inputs, n_outputs, n_layers = 1, n_units = 100, nonlinear = nn.ReLU, layernorm=False):
     '''
     Create a fully connected net:
     
@@ -40,6 +40,9 @@ def create_net(n_inputs, n_outputs, n_layers = 1, n_units = 100, nonlinear = nn.
     for i in range(n_layers):
         layers.append(nonlinear())
         layers.append(nn.Linear(n_units, n_units))
+    
+    if layernorm:
+        layers.append(nn.LayerNorm(n_units))
 
     layers.append(nonlinear())
     layers.append(nn.Linear(n_units, n_outputs))
