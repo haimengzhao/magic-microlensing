@@ -28,7 +28,27 @@ def makedirs(dirname):
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-def create_net(n_inputs, n_outputs, n_layers = 1, n_units = 100, nonlinear = nn.ReLU, layernorm=False):
+class ResBlock(nn.Module):
+    def __init__(self, dim):
+        super(ResBlock, self).__init__()
+        self.linear1 = nn.Linear(dim, dim)
+        self.linear2 = nn.Linear(dim, dim)
+        self.relu1 = nn.PReLU()
+        self.relu2 = nn.PReLU()
+
+    def forward(self, x):
+        residual = x
+
+        out = self.linear1(x)
+        out = self.relu1(out)
+
+        out = self.linear2(out)
+        out += residual
+        out = self.relu2(out)
+
+        return out
+
+def create_net(n_inputs, n_outputs, n_layers = 1, n_units = 100, nonlinear = nn.ReLU, normalize=False):
     '''
     Create a fully connected net:
     
@@ -38,12 +58,13 @@ def create_net(n_inputs, n_outputs, n_layers = 1, n_units = 100, nonlinear = nn.
     '''
     layers = [nn.Linear(n_inputs, n_units)]
     for i in range(n_layers):
+        if normalize:
+            layers.append(nn.LayerNorm(n_units))
         layers.append(nonlinear())
         layers.append(nn.Linear(n_units, n_units))
-    
-    if layernorm:
-        layers.append(nn.LayerNorm(n_units))
 
+    if normalize:
+        layers.append(nn.LayerNorm(n_units))
     layers.append(nonlinear())
     layers.append(nn.Linear(n_units, n_outputs))
     return nn.Sequential(*layers)
@@ -56,7 +77,7 @@ def init_network_weights(net, std = 0.1):
     '''
     for m in net.modules():
         if isinstance(m, nn.Linear):
-            nn.init.normal_(m.weight, mean=0, std=std)
+            nn.init.kaiming_normal_(m.weight)
             nn.init.constant_(m.bias, val=0)
 
 def get_device(tensor):
