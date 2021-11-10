@@ -17,8 +17,10 @@ class GenODE(nn.Module):
         latent_dim = args.latents
         self.device = device
 
-        self.aug_net = utils.create_net(input_dim, latent_dim, n_layers=0, n_units=latent_dim, nonlinear=nn.PReLU, normalize=False).to(device)
+        # self.aug_net = utils.create_net(input_dim, latent_dim, n_layers=0, n_units=latent_dim, nonlinear=nn.PReLU, normalize=False).to(device)
         # self.batchnorm = nn.BatchNorm1d(latent_dim).to(device)
+        self.aug_net = nn.Sequential(utils.create_net(input_dim, latent_dim, n_layers=0, n_units=1024, nonlinear=nn.PReLU, normalize=False),
+            *[utils.ResBlock(latent_dim) for i in range(3)],)
         utils.init_network_weights(self.aug_net)
         
         ode_func_net = utils.create_net(latent_dim + 1, latent_dim, 

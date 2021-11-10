@@ -16,7 +16,7 @@ from model.gen_ode import GenODE
 
 parser = argparse.ArgumentParser('Latent ODE')
 parser.add_argument('--niters', type=int, default=500)
-parser.add_argument('--lr',  type=float, default=4e-3, help="Starting learning rate")
+parser.add_argument('--lr',  type=float, default=4e-7, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
@@ -61,20 +61,28 @@ if __name__ == '__main__':
     ##################################################################
     print(f'Loading Data: {args.dataset}')
     with h5py.File(args.dataset, mode='r') as dataset_file:
-        Y = dataset_file['Y'][...]
-        X_even = dataset_file['X_even'][...]
+        Y = torch.tensor(dataset_file['Y'][...])
+        X_even = torch.tensor(dataset_file['X_even'][...])
 
     train_test_split = Y.shape[0] - 1024
+
     # normalize
-    # Y[:, 3] = np.log(Y[:, 3]) # rho
-    # Y[:, 4] = np.log(Y[:, 4]) # q
-    # Y[:, 5] = np.log(Y[:, 5]) # s
-    # Y[:, 6] = Y[:, 6]/360 # alpha
+    mean_y = torch.mean(Y[:, 2:], axis=0)
+    std_y = torch.std(Y[:, 2:], axis=0)
+    # print(f'Y mean: {mean_y}\nY std: {std_y}')
+    Y[:, 2:] = (Y[:, 2:] - mean_y) / std_y
+    print(f'normalized Y mean: {torch.mean(Y[:, 2:])}\nY std: {torch.mean(torch.std(Y[:, 2:], axis=0))}')
     
-    train_label_dataloader = DataLoader(Y[:20000], batch_size=args.batch_size, shuffle=False)
-    train_even_dataloader = DataLoader(X_even[:20000, :, 1:], batch_size=args.batch_size, shuffle=False)
-    test_label = torch.tensor(Y[train_test_split:])
-    test_even = torch.tensor(X_even[train_test_split:, :, 1:])
+    mean_x_even = torch.mean(X_even[:, :, 1], axis=0)
+    std_x_even = torch.std(X_even[:, :, 1], axis=0)
+    # print(f'X mean: {mean_x_even}\nX std: {std_x_even}')
+    X_even[:, :, 1] = (X_even[:, :, 1] - mean_x_even) / std_x_even
+    print(f'normalized X mean: {torch.mean(X_even[:, :, 1])}\nX std: {torch.mean(torch.std(X_even[:, :, 1], axis=0))}')
+    
+    train_label_dataloader = DataLoader(Y[:train_test_split], batch_size=args.batch_size, shuffle=False)
+    train_even_dataloader = DataLoader(X_even[:train_test_split, :, 1:], batch_size=args.batch_size, shuffle=False)
+    test_label = Y[train_test_split:]
+    test_even = X_even[train_test_split:, :, 1:]
 
 
     input_dim = Y.shape[-1]
@@ -96,7 +104,7 @@ if __name__ == '__main__':
         # 2. overwrite entries in the existing state dict
         model_dict.update(state_dict) 
         # 3. load the new state dict
-        model.load_state_dict(state_dict)
+        model.load_state_dict(model_dict)
         model.to(device)
     ##################################################################
     # Training
@@ -107,17 +115,19 @@ if __name__ == '__main__':
     logger = utils.get_logger(logpath=log_path, filepath=os.path.abspath(__file__))
     logger.info(input_command)
 
-    # optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    # optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
     num_batches = len(train_label_dataloader)
 
     loss_func = nn.MSELoss()
 
-    time_steps_to_predict = torch.tensor(X_even[0, :, 0]).to(device)
+    time_steps_to_predict = X_even[0, :, 0].to(device)
 
     for epoch in range(args.niters):
-        utils.update_learning_rate(optimizer, decay_rate = 0.95, lowest = args.lr / 10)
+        utils.update_learning_rate(optimizer, decay_rate = 0.99, lowest = args.lr / 10)
+        lr = optimizer.state_dict()['param_groups'][0]['lr']
+        print(f'Epoch {epoch}, Learning Rate {lr}')
         for i, (y_batch, x_even_batch) in enumerate(zip(train_label_dataloader, train_even_dataloader)):
 
             y_batch = y_batch.float().to(device)
@@ -133,7 +143,7 @@ if __name__ == '__main__':
 
             print(f'batch {i}/{num_batches}, loss {loss.item()}')
 
-            if i % 100 == 0:
+            if i % int(num_batches/10) == 0:
                 torch.save({
                 'args': args,
                 'state_dict': model.state_dict(),
