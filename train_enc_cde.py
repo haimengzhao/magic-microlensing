@@ -12,12 +12,16 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 import model.utils as utils
-from model.gen_ode import GenODE
+from model.encoder_cde import CDEEncoder
+
+import torchcde
+
+from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser('Latent ODE')
 parser.add_argument('--niters', type=int, default=500)
-parser.add_argument('--lr',  type=float, default=4e-7, help="Starting learning rate")
-parser.add_argument('-b', '--batch-size', type=int, default=64)
+parser.add_argument('--lr',  type=float, default=4e-6, help="Starting learning rate")
+parser.add_argument('-b', '--batch-size', type=int, default=128)
 
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/', help="Path for save checkpoints")
@@ -44,6 +48,8 @@ if __name__ == '__main__':
 
     print(f'Num of GPUs available: {torch.cuda.device_count()}')
 
+    writer = SummaryWriter(log_dir='/work/hmzhao/tbxdata/')
+
     experimentID = args.load
     if experimentID is None:
         # Make a new experiment ID
@@ -64,16 +70,18 @@ if __name__ == '__main__':
         Y = torch.tensor(dataset_file['Y'][...])
         X_even = torch.tensor(dataset_file['X_even'][...])
 
-    train_test_split = Y.shape[0] - 1024
+    test_size = 1024
+    train_size = len(Y) - test_size
 
     # normalize
     Y[:, 3:6] = torch.log(Y[:, 3:6])
     mean_y = torch.mean(Y, axis=0)
     std_y = torch.std(Y, axis=0)
-    std_y[std_y==0] = 1
+    std_mask = (std_y==0)
+    std_y[std_mask] = 1
     # print(f'Y mean: {mean_y}\nY std: {std_y}')
     Y = (Y - mean_y) / std_y
-    print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0))}')
+    print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
     
     mean_x_even = torch.mean(X_even[:, :, 1], axis=0)
     std_x_even = torch.std(X_even[:, :, 1], axis=0)
@@ -81,17 +89,21 @@ if __name__ == '__main__':
     X_even[:, :, 1] = (X_even[:, :, 1] - mean_x_even) / std_x_even
     print(f'normalized X mean: {torch.mean(X_even[:, :, 1])}\nX std: {torch.mean(torch.std(X_even[:, :, 1], axis=0))}')
     
-    train_label_dataloader = DataLoader(Y[:2048], batch_size=args.batch_size, shuffle=False)
-    train_even_dataloader = DataLoader(X_even[:2048, :, 1:], batch_size=args.batch_size, shuffle=False)
-    test_label = Y[train_test_split:]
-    test_even = X_even[train_test_split:, :, 1:]
+    # CDE interpolation
+    train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_even[:train_size, :, :])
+    train_dataset = torch.utils.data.TensorDataset(train_coeffs, Y[:train_size])
 
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
 
-    input_dim = Y.shape[-1]
-    output_dim = X_even.shape[-1] - 1
+    test_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_even[(-test_size):, :, :]).float().to(device)
+    test_Y = Y[(-test_size):].float().to(device)
+
+    output_dim = Y.shape[-1]
+    input_dim = X_even.shape[-1]
+    latent_dim = args.latents
     ##################################################################
     # Create the model
-    model = GenODE(args, input_dim, output_dim, device).to(device)
+    model = CDEEncoder(input_dim, latent_dim, output_dim).to(device)
     ##################################################################
     # Load checkpoint and evaluate the model
     if args.load is not None:
@@ -121,32 +133,31 @@ if __name__ == '__main__':
     # optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
     # optimizer = optim.SGD(model.parameters(), lr=args.lr)
 
-    num_batches = len(train_label_dataloader)
+    num_batches = len(train_dataloader)
 
     loss_func = nn.MSELoss()
 
-    time_steps_to_predict = X_even[0, :, 0].to(device)
-
     for epoch in range(args.niters):
-        utils.update_learning_rate(optimizer, decay_rate = 0.99, lowest = args.lr / 10)
-        lr = optimizer.state_dict()['param_groups'][0]['lr']
-        print(f'Epoch {epoch}, Learning Rate {lr}')
-        for i, (y_batch, x_even_batch) in enumerate(zip(train_label_dataloader, train_even_dataloader)):
+        # utils.update_learning_rate(optimizer, decay_rate = 0.99, lowest = args.lr / 10)
+        # lr = optimizer.state_dict()['param_groups'][0]['lr']
+        # print(f'Epoch {epoch}, Learning Rate {lr}')
+        for i, (batch_coeffs, batch_y) in enumerate(train_dataloader):
 
-            y_batch = y_batch.float().to(device)
-            x_even_batch = x_even_batch.float().to(device)
+            batch_y = batch_y.float().to(device)
+            batch_coeffs = batch_coeffs.float().to(device)
 
             optimizer.zero_grad()
 
-            x_even_pred = model(y_batch, time_steps_to_predict)
-
-            loss = loss_func(x_even_pred, x_even_batch)
+            pred_y = model(batch_coeffs)
+            
+            loss = loss_func(batch_y, pred_y)
             loss.backward()
             optimizer.step()
 
             print(f'batch {i}/{num_batches}, loss {loss.item()}')
+            writer.add_scalar('loss/batch_loss', loss.item(), i)
 
-            if i % int(num_batches) == 0:
+            if i == 0:
                 torch.save({
                 'args': args,
                 'state_dict': model.state_dict(),
@@ -154,16 +165,13 @@ if __name__ == '__main__':
                 # print(f'Model saved to {ckpt_path}')
 
                 with torch.no_grad():
-                    y_batch = test_label
-                    x_even_batch = test_even
+                    pred_y = model(test_coeffs)
+                    loss = loss_func(test_Y, pred_y)
 
-                    y_batch = y_batch.float().to(device)
-                    x_even_batch = x_even_batch.float().to(device)
-
-                    x_even_pred = model(y_batch, time_steps_to_predict)
-                    loss = loss_func(x_even_pred, x_even_batch)
-
-                    message = f'Epoch {epoch}, Batch {i}, Test Loss {loss.item()}'
+                    message = f'Epoch {epoch}, Test Loss {loss.item()}'
+                    writer.add_scalar('loss/test_loss', loss.item(), epoch)
+                    for name, param in model.named_parameters():
+                        writer.add_histogram(name, param.clone().cpu().data.numpy(), epoch)
                     # logger.info("Experiment " + str(experimentID))
                     logger.info(message)
 
@@ -172,4 +180,4 @@ if __name__ == '__main__':
         'state_dict': model.state_dict(),
     }, ckpt_path)
     print(f'Model saved to {ckpt_path}')
-
+    writer.close()

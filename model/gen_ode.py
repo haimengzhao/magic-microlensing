@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.types import Device
 
 import model.utils as utils
 from model.neural_ode import ODEFunc
