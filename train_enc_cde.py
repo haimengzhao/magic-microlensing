@@ -138,9 +138,10 @@ if __name__ == '__main__':
     loss_func = nn.MSELoss()
 
     for epoch in range(args.niters):
-        # utils.update_learning_rate(optimizer, decay_rate = 0.99, lowest = args.lr / 10)
-        # lr = optimizer.state_dict()['param_groups'][0]['lr']
-        # print(f'Epoch {epoch}, Learning Rate {lr}')
+        utils.update_learning_rate(optimizer, decay_rate = 0.99, lowest = args.lr / 10)
+        lr = optimizer.state_dict()['param_groups'][0]['lr']
+        print(f'Epoch {epoch}, Learning Rate {lr}')
+        writer.add_scalar('learning_rate', lr, epoch)
         for i, (batch_coeffs, batch_y) in enumerate(train_dataloader):
 
             batch_y = batch_y.float().to(device)
@@ -155,14 +156,14 @@ if __name__ == '__main__':
             optimizer.step()
 
             print(f'batch {i}/{num_batches}, loss {loss.item()}')
-            writer.add_scalar('loss/batch_loss', loss.item(), i)
+            writer.add_scalar('loss/batch_loss', loss.item(), (i + epoch * num_batches))
 
             if i == 0:
                 torch.save({
                 'args': args,
                 'state_dict': model.state_dict(),
                 }, ckpt_path)
-                # print(f'Model saved to {ckpt_path}')
+                print(f'Model saved to {ckpt_path}')
 
                 with torch.no_grad():
                     pred_y = model(test_coeffs)
