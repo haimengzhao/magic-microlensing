@@ -29,22 +29,25 @@ def makedirs(dirname):
         os.makedirs(dirname)
 
 class ResBlock(nn.Module):
-    def __init__(self, dim):
+    def __init__(self, dim, hidden_dim, nonlinear=nn.PReLU):
         super(ResBlock, self).__init__()
-        self.linear1 = nn.Linear(dim, dim)
-        self.linear2 = nn.Linear(dim, dim)
-        self.relu1 = nn.PReLU()
-        self.relu2 = nn.PReLU()
+        self.linear1 = nn.Linear(dim, hidden_dim)
+        self.nonlinear1 = nonlinear()
+        self.linear2 = nn.Linear(hidden_dim, dim)
+        self.nonlinear2 = nonlinear()
+        self.linear3 = nn.Linear(dim, dim)
 
     def forward(self, x):
         residual = x
 
         out = self.linear1(x)
-        out = self.relu1(out)
+        out = self.nonlinear1(out)
 
         out = self.linear2(out)
         out += residual
-        out = self.relu2(out)
+        out = self.nonlinear2(out)
+
+        out = self.linear3(out)
 
         return out
 
@@ -69,7 +72,7 @@ def create_net(n_inputs, n_outputs, n_layers = 1, n_units = 100, nonlinear = nn.
     layers.append(nn.Linear(n_units, n_outputs))
     return nn.Sequential(*layers)
 
-def init_network_weights(net, std = 0.1):
+def init_network_weights(net, method=nn.init.kaiming_normal_):
     '''
     Initialize network weights.
 
@@ -77,7 +80,7 @@ def init_network_weights(net, std = 0.1):
     '''
     for m in net.modules():
         if isinstance(m, nn.Linear):
-            nn.init.kaiming_normal_(m.weight)
+            method(m.weight)
             nn.init.constant_(m.bias, val=0)
 
 def get_device(tensor):

@@ -29,7 +29,7 @@ class ODEFunc(nn.Module):
         t_local: current time point
         y: value at the current time point
         """
-        grad = self.gradient_net(torch.cat([t_local.repeat(y.shape[0], 1), y], dim=-1))
+        grad = self.gradient_net(torch.cat([(t_local/100).repeat(y.shape[0], 1), y], dim=-1))
         if backwards:
             grad = -grad
         return grad

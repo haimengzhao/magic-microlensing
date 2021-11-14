@@ -16,7 +16,7 @@ from model.gen_ode import GenODE
 
 parser = argparse.ArgumentParser('Latent ODE')
 parser.add_argument('--niters', type=int, default=500)
-parser.add_argument('--lr',  type=float, default=4e-7, help="Starting learning rate")
+parser.add_argument('--lr',  type=float, default=4e-6, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
@@ -24,10 +24,10 @@ parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/', hel
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
 
-parser.add_argument('-l', '--latents', type=int, default=128, help="Dim of the latent state")
-parser.add_argument('--gen-layers', type=int, default=3, help="Number of layers in ODE func in generative ODE")
+parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the latent state")
+parser.add_argument('--gen-layers', type=int, default=5, help="Number of layers in ODE func in generative ODE")
 
-parser.add_argument('-u', '--units', type=int, default=512, help="Number of units per layer in ODE func")
+parser.add_argument('-u', '--units', type=int, default=1024, help="Number of units per layer in ODE func")
 
 args = parser.parse_args()
 
@@ -79,8 +79,8 @@ if __name__ == '__main__':
     X_even[:, :, 1] = (X_even[:, :, 1] - mean_x_even) / std_x_even
     print(f'normalized X mean: {torch.mean(X_even[:, :, 1])}\nX std: {torch.mean(torch.std(X_even[:, :, 1], axis=0))}')
     
-    train_label_dataloader = DataLoader(Y[:train_test_split], batch_size=args.batch_size, shuffle=False)
-    train_even_dataloader = DataLoader(X_even[:train_test_split, :, 1:], batch_size=args.batch_size, shuffle=False)
+    train_label_dataloader = DataLoader(Y[:2048], batch_size=args.batch_size, shuffle=False)
+    train_even_dataloader = DataLoader(X_even[:2048, :, 1:], batch_size=args.batch_size, shuffle=False)
     test_label = Y[train_test_split:]
     test_even = X_even[train_test_split:, :, 1:]
 
@@ -125,9 +125,9 @@ if __name__ == '__main__':
     time_steps_to_predict = X_even[0, :, 0].to(device)
 
     for epoch in range(args.niters):
-        utils.update_learning_rate(optimizer, decay_rate = 0.99, lowest = args.lr / 10)
-        lr = optimizer.state_dict()['param_groups'][0]['lr']
-        print(f'Epoch {epoch}, Learning Rate {lr}')
+        # utils.update_learning_rate(optimizer, decay_rate = 0.99, lowest = args.lr / 10)
+        # lr = optimizer.state_dict()['param_groups'][0]['lr']
+        # print(f'Epoch {epoch}, Learning Rate {lr}')
         for i, (y_batch, x_even_batch) in enumerate(zip(train_label_dataloader, train_even_dataloader)):
 
             y_batch = y_batch.float().to(device)
@@ -143,12 +143,12 @@ if __name__ == '__main__':
 
             print(f'batch {i}/{num_batches}, loss {loss.item()}')
 
-            if i % int(num_batches/10) == 0:
+            if i % int(num_batches) == 0:
                 torch.save({
                 'args': args,
                 'state_dict': model.state_dict(),
                 }, ckpt_path)
-                print(f'Model saved to {ckpt_path}')
+                # print(f'Model saved to {ckpt_path}')
 
                 with torch.no_grad():
                     y_batch = test_label
@@ -161,7 +161,7 @@ if __name__ == '__main__':
                     loss = loss_func(x_even_pred, x_even_batch)
 
                     message = f'Epoch {epoch}, Batch {i}, Test Loss {loss.item()}'
-                    logger.info("Experiment " + str(experimentID))
+                    # logger.info("Experiment " + str(experimentID))
                     logger.info(message)
 
     torch.save({
