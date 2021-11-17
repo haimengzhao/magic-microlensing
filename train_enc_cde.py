@@ -128,6 +128,7 @@ if __name__ == '__main__':
     
     logger = utils.get_logger(logpath=log_path, filepath=os.path.abspath(__file__))
     logger.info(input_command)
+    logger.info("Experiment " + str(experimentID))
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     # optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
