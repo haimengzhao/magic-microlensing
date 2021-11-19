@@ -27,8 +27,8 @@ class CDEFunc(nn.Module):
         z = torch.cat([(t/100).repeat(z.shape[0], 1), z], dim=-1)
         z = self.linear1(z)
         z = self.relu1(z)
-        z = self.resblocks(z)
-        z = self.relu2(z)
+        # z = self.resblocks(z)
+        # z = self.relu2(z)
         z = self.linear2(z)
         z = self.tanh(z) # important!
 
@@ -50,8 +50,20 @@ class CDEEncoder(nn.Module):
         self.latent_dim = latent_dim
 
         self.cde_func = CDEFunc(input_dim, latent_dim)
-        self.initial = utils.create_net(input_dim, latent_dim, n_layers=3, n_units=1024, nonlinear=nn.PReLU)
-        self.readout = utils.create_net(latent_dim, output_dim, n_layers=3, n_units=1024, nonlinear=nn.PReLU)
+        # self.initial = nn.Sequential(
+        #     utils.create_net(input_dim, 1024, n_layers=0, n_units=1024, nonlinear=nn.PReLU),
+        #     *[utils.ResBlock(1024, 1024, nonlinear=nn.PReLU) for i in range(3)],
+        #     utils.create_net(1024, latent_dim, n_layers=0, n_units=1024, nonlinear=nn.PReLU)
+        # )
+        # self.initial = utils.create_net(input_dim, latent_dim, n_layers=1, n_units=1024, nonlinear=nn.PReLU)
+        self.initial = utils.create_net(input_dim, latent_dim, n_layers=5, n_units=1024, nonlinear=nn.PReLU)
+        # self.readout = nn.Sequential(
+        #     utils.create_net(latent_dim, 1024, n_layers=0, n_units=1024, nonlinear=nn.PReLU),
+        #     *[utils.ResBlock(1024, 1024, nonlinear=nn.PReLU) for i in range(3)],
+        #     utils.create_net(1024, output_dim, n_layers=0, n_units=1024, nonlinear=nn.PReLU)
+        # )
+        # self.readout = utils.create_net(latent_dim, output_dim, n_layers=1, n_units=1024, nonlinear=nn.PReLU)
+        self.readout = utils.create_net(latent_dim, output_dim, n_layers=5, n_units=1024, nonlinear=nn.PReLU)
 
     def forward(self, coeffs):
         X = torchcde.CubicSpline(coeffs)

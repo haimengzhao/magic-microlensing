@@ -26,16 +26,17 @@ parser.add_argument('-b', '--batch-size', type=int, default=128)
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
+parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
 parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
 
-parser.add_argument('-l', '--latents', type=int, default=64, help="Dim of the latent state")
+parser.add_argument('-l', '--latents', type=int, default=128, help="Dim of the latent state")
 parser.add_argument('--gen-layers', type=int, default=5, help="Number of layers in ODE func in generative ODE")
 
 parser.add_argument('-u', '--units', type=int, default=1024, help="Number of units per layer in ODE func")
 
 args = parser.parse_args()
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -48,12 +49,10 @@ if __name__ == '__main__':
 
     print(f'Num of GPUs available: {torch.cuda.device_count()}')
 
-    writer = SummaryWriter(log_dir='/work/hmzhao/tbxdata/')
-
     experimentID = args.load
     if experimentID is None:
         # Make a new experiment ID
-        experimentID = int(SystemRandom().random()*100000)
+        experimentID = int(SystemRandom().random() * 100000)
     print(f'ExperimentID: {experimentID}')
     ckpt_path = os.path.join(args.save, "experiment_" + str(experimentID) + '.ckpt')
     
@@ -64,14 +63,18 @@ if __name__ == '__main__':
         input_command = input_command[:ind] + input_command[(ind+2):]
     input_command = " ".join(input_command)
 
+    writer = SummaryWriter(log_dir=f'/work/hmzhao/tbxdata/{experimentID}')
+
     ##################################################################
     print(f'Loading Data: {args.dataset}')
     with h5py.File(args.dataset, mode='r') as dataset_file:
         Y = torch.tensor(dataset_file['Y'][...])
         X_even = torch.tensor(dataset_file['X_even'][...])
+        X_rand = torch.tensor(dataset_file['X_random'][...])
 
     test_size = 1024
-    train_size = len(Y) - test_size
+    # train_size = len(Y) - test_size
+    train_size = 128 * 16
 
     # normalize
     Y[:, 3:6] = torch.log(Y[:, 3:6])
@@ -82,12 +85,24 @@ if __name__ == '__main__':
     # print(f'Y mean: {mean_y}\nY std: {std_y}')
     Y = (Y - mean_y) / std_y
     print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
+
+    # only target at q (4) and s (5)
+    Y = Y[:, 4:6]
     
-    mean_x_even = torch.mean(X_even[:, :, 1], axis=0)
-    std_x_even = torch.std(X_even[:, :, 1], axis=0)
+    #
+    # adaptive normalize is not compatible with irregular data, ABANDONED
+    # use static normalize instead
+    #
+    # mean_x_even = torch.mean(X_even[:, :, 1], axis=0)
+    # std_x_even = torch.std(X_even[:, :, 1], axis=0)
     # print(f'X mean: {mean_x_even}\nX std: {std_x_even}')
+    mean_x_even = 14.5
+    std_x_even = 0.2
     X_even[:, :, 1] = (X_even[:, :, 1] - mean_x_even) / std_x_even
     print(f'normalized X mean: {torch.mean(X_even[:, :, 1])}\nX std: {torch.mean(torch.std(X_even[:, :, 1], axis=0))}')
+
+    X_rand = X_rand[:, :, :2]
+    X_rand[:, :, 1] = (X_rand[:, :, 1] - mean_x_even) / std_x_even
     
     # CDE interpolation
     train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_even[:train_size, :, :])
@@ -97,10 +112,16 @@ if __name__ == '__main__':
 
     test_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_even[(-test_size):, :, :]).float().to(device)
     test_Y = Y[(-test_size):].float().to(device)
+    
+    test_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_rand[(-test_size):, :, :]).float().to(device)
 
     output_dim = Y.shape[-1]
     input_dim = X_even.shape[-1]
     latent_dim = args.latents
+
+    del Y
+    del X_even
+    del X_rand
     ##################################################################
     # Create the model
     model = CDEEncoder(input_dim, latent_dim, output_dim).to(device)
@@ -138,7 +159,7 @@ if __name__ == '__main__':
 
     loss_func = nn.MSELoss()
 
-    for epoch in range(args.niters):
+    for epoch in range(args.resume, args.resume + args.niters):
         utils.update_learning_rate(optimizer, decay_rate = 0.99, lowest = args.lr / 10)
         lr = optimizer.state_dict()['param_groups'][0]['lr']
         print(f'Epoch {epoch}, Learning Rate {lr}')
@@ -151,13 +172,18 @@ if __name__ == '__main__':
             optimizer.zero_grad()
 
             pred_y = model(batch_coeffs)
+
+            mse_log10q = torch.mean((batch_y[:, 0] / np.log(10) - pred_y[:, 0] / np.log(10))**2).detach().cpu()
+            mse_log10s = torch.mean((batch_y[:, 1] / np.log(10) - pred_y[:, 1] / np.log(10))**2).detach().cpu()
             
             loss = loss_func(batch_y, pred_y)
             loss.backward()
             optimizer.step()
 
-            print(f'batch {i}/{num_batches}, loss {loss.item()}')
+            print(f'batch {i}/{num_batches}, loss {loss.item()}, mse_log10q {mse_log10q.item()}, mse_log10s {mse_log10s.item()}')
             writer.add_scalar('loss/batch_loss', loss.item(), (i + epoch * num_batches))
+            writer.add_scalar('mse/batch_mse_log10q', mse_log10q.item(), (i + epoch * num_batches))
+            writer.add_scalar('mse/batch_mse_log10s', mse_log10s.item(), (i + epoch * num_batches))
 
             if i == 0:
                 torch.save({
@@ -170,8 +196,21 @@ if __name__ == '__main__':
                     pred_y = model(test_coeffs)
                     loss = loss_func(test_Y, pred_y)
 
-                    message = f'Epoch {epoch}, Test Loss {loss.item()}'
+                    mse_log10q = torch.mean((test_Y[:, 0] / np.log(10) - pred_y[:, 0] / np.log(10))**2).detach().cpu()
+                    mse_log10s = torch.mean((test_Y[:, 1] / np.log(10) - pred_y[:, 1] / np.log(10))**2).detach().cpu()
+
+                    pred_y_rand = model(test_rand_coeffs)
+                    loss_rand = loss_func(test_Y, pred_y_rand)
+
+                    mse_log10q_rand = torch.mean((test_Y[:, 0] / np.log(10) - pred_y_rand[:, 0] / np.log(10))**2).detach().cpu()
+                    mse_log10s_rand = torch.mean((test_Y[:, 1] / np.log(10) - pred_y_rand[:, 1] / np.log(10))**2).detach().cpu()
+
+                    message = f'Epoch {epoch}, Test Loss {loss.item()}, mse_log10q {mse_log10q.item()}, mse_log10s {mse_log10s.item()}, mse_log10q_rand {mse_log10q_rand.item()}, mse_log10s_rand {mse_log10s_rand.item()}'
                     writer.add_scalar('loss/test_loss', loss.item(), epoch)
+                    writer.add_scalar('mse/test_mse_log10q', mse_log10q.item(), epoch)
+                    writer.add_scalar('mse/test_mse_log10s', mse_log10s.item(), epoch)
+                    writer.add_scalar('mse/test_mse_log10q_rand', mse_log10q_rand.item(), epoch)
+                    writer.add_scalar('mse/test_mse_log10s_rand', mse_log10s_rand.item(), epoch)
                     for name, param in model.named_parameters():
                         writer.add_histogram(name, param.clone().cpu().data.numpy(), epoch)
                     # logger.info("Experiment " + str(experimentID))
