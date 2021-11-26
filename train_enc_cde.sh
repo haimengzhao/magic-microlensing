@@ -1,6 +1,6 @@
 #!/bin/bash
-#PBS -N train_enc_cde_l128
-#PBS -lselect=1:ncpus=1:mem=8gb:ngpus=1
+#PBS -N train_enc_cde
+#PBS -lselect=1:ncpus=2:mem=8gb:ngpus=1
 #PBS -j oe
 
 cd $PBS_O_WORKDIR

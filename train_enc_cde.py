@@ -36,7 +36,7 @@ parser.add_argument('-u', '--units', type=int, default=1024, help="Number of uni
 
 args = parser.parse_args()
 
-device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -76,18 +76,20 @@ if __name__ == '__main__':
     # train_size = len(Y) - test_size
     train_size = 128 * 16
 
-    # normalize
+    # # normalize
     Y[:, 3:6] = torch.log(Y[:, 3:6])
-    mean_y = torch.mean(Y, axis=0)
-    std_y = torch.std(Y, axis=0)
-    std_mask = (std_y==0)
-    std_y[std_mask] = 1
+    # mean_y = torch.mean(Y, axis=0)
+    # std_y = torch.std(Y, axis=0)
+    # std_mask = (std_y==0)
+    # std_y[std_mask] = 1
     # print(f'Y mean: {mean_y}\nY std: {std_y}')
-    Y = (Y - mean_y) / std_y
-    print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
+    # Y = (Y - mean_y) / std_y
+    # print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
 
     # only target at q (4) and s (5)
     Y = Y[:, 4:6]
+    # mean_y = mean_y[4:6]
+    # std_y = std_y[4:6]
     
     #
     # adaptive normalize is not compatible with irregular data, ABANDONED
@@ -103,6 +105,10 @@ if __name__ == '__main__':
 
     X_rand = X_rand[:, :, :2]
     X_rand[:, :, 1] = (X_rand[:, :, 1] - mean_x_even) / std_x_even
+
+    # time rescale
+    X_even[:, :, 0] = X_even[:, :, 0] / 200
+    X_rand[:, :, 0] = X_rand[:, :, 0] / 200
     
     # CDE interpolation
     train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_even[:train_size, :, :])
@@ -176,8 +182,10 @@ if __name__ == '__main__':
             mse_log10q = torch.mean((batch_y[:, 0] / np.log(10) - pred_y[:, 0] / np.log(10))**2).detach().cpu()
             mse_log10s = torch.mean((batch_y[:, 1] / np.log(10) - pred_y[:, 1] / np.log(10))**2).detach().cpu()
             
-            loss = loss_func(batch_y, pred_y)
+            loss = loss_func(pred_y, batch_y)
             loss.backward()
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
+            writer.add_scalar('gradient_norm', grad_norm.item(), (i + epoch * num_batches))
             optimizer.step()
 
             print(f'batch {i}/{num_batches}, loss {loss.item()}, mse_log10q {mse_log10q.item()}, mse_log10s {mse_log10s.item()}')
@@ -186,6 +194,7 @@ if __name__ == '__main__':
             writer.add_scalar('mse/batch_mse_log10s', mse_log10s.item(), (i + epoch * num_batches))
 
             if i == 0:
+                model.eval()
                 torch.save({
                 'args': args,
                 'state_dict': model.state_dict(),
@@ -194,19 +203,20 @@ if __name__ == '__main__':
 
                 with torch.no_grad():
                     pred_y = model(test_coeffs)
-                    loss = loss_func(test_Y, pred_y)
+                    loss = loss_func(pred_y, test_Y)
 
                     mse_log10q = torch.mean((test_Y[:, 0] / np.log(10) - pred_y[:, 0] / np.log(10))**2).detach().cpu()
                     mse_log10s = torch.mean((test_Y[:, 1] / np.log(10) - pred_y[:, 1] / np.log(10))**2).detach().cpu()
 
                     pred_y_rand = model(test_rand_coeffs)
-                    loss_rand = loss_func(test_Y, pred_y_rand)
+                    loss_rand = loss_func(pred_y_rand, test_Y)
 
                     mse_log10q_rand = torch.mean((test_Y[:, 0] / np.log(10) - pred_y_rand[:, 0] / np.log(10))**2).detach().cpu()
                     mse_log10s_rand = torch.mean((test_Y[:, 1] / np.log(10) - pred_y_rand[:, 1] / np.log(10))**2).detach().cpu()
 
-                    message = f'Epoch {epoch}, Test Loss {loss.item()}, mse_log10q {mse_log10q.item()}, mse_log10s {mse_log10s.item()}, mse_log10q_rand {mse_log10q_rand.item()}, mse_log10s_rand {mse_log10s_rand.item()}'
+                    message = f'Epoch {epoch}, Test Loss {loss.item()}, mse_log10q {mse_log10q.item()}, mse_log10s {mse_log10s.item()}, loss_rand {loss_rand.item()}, mse_log10q_rand {mse_log10q_rand.item()}, mse_log10s_rand {mse_log10s_rand.item()}'
                     writer.add_scalar('loss/test_loss', loss.item(), epoch)
+                    writer.add_scalar('loss/test_loss_rand', loss_rand.item(), epoch)
                     writer.add_scalar('mse/test_mse_log10q', mse_log10q.item(), epoch)
                     writer.add_scalar('mse/test_mse_log10s', mse_log10s.item(), epoch)
                     writer.add_scalar('mse/test_mse_log10q_rand', mse_log10q_rand.item(), epoch)
@@ -215,6 +225,8 @@ if __name__ == '__main__':
                         writer.add_histogram(name, param.clone().cpu().data.numpy(), epoch)
                     # logger.info("Experiment " + str(experimentID))
                     logger.info(message)
+
+                model.train()
 
     torch.save({
         'args': args,

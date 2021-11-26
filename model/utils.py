@@ -29,13 +29,14 @@ def makedirs(dirname):
         os.makedirs(dirname)
 
 class ResBlock(nn.Module):
-    def __init__(self, dim, hidden_dim, nonlinear=nn.PReLU):
+    def __init__(self, dim, hidden_dim, nonlinear=nn.PReLU, layernorm=False):
         super(ResBlock, self).__init__()
         self.linear1 = nn.Linear(dim, hidden_dim)
         self.nonlinear1 = nonlinear()
         self.linear2 = nn.Linear(hidden_dim, dim)
-        self.nonlinear2 = nonlinear()
-        self.linear3 = nn.Linear(dim, dim)
+
+        if layernorm:
+            self.layernorm = nn.LayerNorm(dim)
 
     def forward(self, x):
         residual = x
@@ -44,11 +45,11 @@ class ResBlock(nn.Module):
         out = self.nonlinear1(out)
 
         out = self.linear2(out)
+
+        out = self.layernorm(out)
+
         out += residual
-        out = self.nonlinear2(out)
-
-        out = self.linear3(out)
-
+        
         return out
 
 def create_net(n_inputs, n_outputs, n_layers = 1, n_units = 100, nonlinear = nn.ReLU, normalize=False):
