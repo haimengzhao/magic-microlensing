@@ -35,6 +35,7 @@ class ResBlock(nn.Module):
         self.nonlinear1 = nonlinear()
         self.linear2 = nn.Linear(hidden_dim, dim)
 
+        self.layernorm = layernorm
         if layernorm:
             self.layernorm = nn.LayerNorm(dim)
 
@@ -46,7 +47,8 @@ class ResBlock(nn.Module):
 
         out = self.linear2(out)
 
-        out = self.layernorm(out)
+        if self.layernorm:
+            out = self.layernorm(out)
 
         out += residual
         

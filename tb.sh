@@ -1,6 +1,6 @@
 #!/bin/bash
-#PBS -N train_enc_cde_all
-#PBS -lselect=1:ncpus=1:mem=32gb:ngpus=1
+#PBS -N tensorboard
+#PBS -lselect=1:ncpus=1:mem=1gb:ngpus=0
 #PBS -j oe
 
 cd $PBS_O_WORKDIR
@@ -8,4 +8,4 @@ cd $PBS_O_WORKDIR
 source /opt/miniconda3/etc/profile.d/conda.sh
 conda activate ode-rnn
 
-python train_enc_cde.py
+tensorboard --logdir=/work/hmzhao/tbxdata/
