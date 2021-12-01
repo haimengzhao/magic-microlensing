@@ -17,11 +17,11 @@ class CDEFunc(nn.Module):
         self.input_dim = input_dim
         self.latent_dim = latent_dim
 
-        self.linear1 = nn.Linear(latent_dim, 256)
-        self.relu1 = nn.PReLU()
-        self.resblocks = nn.Sequential(*[utils.ResBlock(256, 256, nonlinear=nn.PReLU, layernorm=False) for i in range(3)])
-        self.relu2 = nn.PReLU()
-        self.linear2 = nn.Linear(256, input_dim * latent_dim)
+        self.linear1 = nn.Linear(latent_dim, 128)
+        self.relu1 = nn.ReLU()
+        self.resblocks = nn.Sequential(*[utils.ResBlock(128, 128, nonlinear=nn.ReLU, layernorm=False) for i in range(3)])
+        self.relu2 = nn.ReLU()
+        self.linear2 = nn.Linear(128, input_dim * latent_dim)
         self.tanh = nn.Tanh()
     
     def forward(self, t, z):

@@ -1,5 +1,5 @@
 #!/bin/bash
-#PBS -N train_enc_cde_all
+#PBS -N train_enc_cde_log
 #PBS -lselect=1:ncpus=1:mem=32gb:ngpus=1
 #PBS -j oe
 

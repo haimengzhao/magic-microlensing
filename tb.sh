@@ -1,6 +1,6 @@
 #!/bin/bash
 #PBS -N tensorboard
-#PBS -lselect=1:ncpus=1:mem=1gb:ngpus=0
+#PBS -lselect=1:ncpus=1:mem=4gb:ngpus=0
 #PBS -j oe
 
 cd $PBS_O_WORKDIR
