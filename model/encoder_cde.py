@@ -17,12 +17,13 @@ class CDEFunc(nn.Module):
         self.input_dim = input_dim
         self.latent_dim = latent_dim
 
-        self.linear1 = nn.Linear(latent_dim, 128)
+        self.linear1 = nn.Linear(latent_dim, 1024)
         self.relu1 = nn.ReLU()
-        self.resblocks = nn.Sequential(*[utils.ResBlock(128, 128, nonlinear=nn.ReLU, layernorm=False) for i in range(3)])
+        self.resblocks = nn.Sequential(*[utils.ResBlock(1024, 1024, nonlinear=nn.ReLU, layernorm=False) for i in range(3)])
         self.relu2 = nn.ReLU()
-        self.linear2 = nn.Linear(128, input_dim * latent_dim)
+        self.linear2 = nn.Linear(1024, input_dim * latent_dim)
         self.tanh = nn.Tanh()
+        self.linear3 = nn.Linear(input_dim * latent_dim, input_dim * latent_dim)
     
     def forward(self, t, z):
         # z = torch.cat([t.repeat(z.shape[0], 1), z], dim=-1)
@@ -32,6 +33,7 @@ class CDEFunc(nn.Module):
         z = self.relu2(z)
         z = self.linear2(z)
         z = self.tanh(z) # important!
+        z = self.linear3(z)
 
         z = z.view(z.shape[0], self.latent_dim, self.input_dim)
 

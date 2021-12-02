@@ -19,7 +19,7 @@ import torchcde
 from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser('Latent ODE')
-parser.add_argument('--niters', type=int, default=500)
+parser.add_argument('--niters', type=int, default=1000)
 parser.add_argument('--lr',  type=float, default=4e-6, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
@@ -29,14 +29,14 @@ parser.add_argument('--load', type=str, default=None, help="ID of the experiment
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
 parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
 
-parser.add_argument('-l', '--latents', type=int, default=8, help="Dim of the latent state")
+parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the latent state")
 parser.add_argument('--gen-layers', type=int, default=5, help="Number of layers in ODE func in generative ODE")
 
 parser.add_argument('-u', '--units', type=int, default=1024, help="Number of units per layer in ODE func")
 
 args = parser.parse_args()
 
-device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -63,7 +63,7 @@ if __name__ == '__main__':
         input_command = input_command[:ind] + input_command[(ind+2):]
     input_command = " ".join(input_command)
 
-    writer = SummaryWriter(log_dir=f'/work/hmzhao/tbxdata/logsig_qs_{experimentID}')
+    writer = SummaryWriter(log_dir=f'/work/hmzhao/tbxdata/l{args.latents}_Mix_qs_{experimentID}')
 
     ##################################################################
     print(f'Loading Data: {args.dataset}')
@@ -79,18 +79,18 @@ if __name__ == '__main__':
     # # normalize
     Y[:, 3:6] = torch.log(Y[:, 3:6])
     Y[:, -1] = torch.cos(Y[:, -1] / 180 * 3.1415926)
-    # mean_y = torch.mean(Y, axis=0)
-    # std_y = torch.std(Y, axis=0)
-    # std_mask = (std_y==0)
-    # std_y[std_mask] = 1
-    # print(f'Y mean: {mean_y}\nY std: {std_y}')
-    # Y = (Y - mean_y) / std_y
-    # print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
+    mean_y = torch.mean(Y, axis=0)
+    std_y = torch.std(Y, axis=0)
+    std_mask = (std_y==0)
+    std_y[std_mask] = 1
+    print(f'Y mean: {mean_y}\nY std: {std_y}')
+    Y = (Y - mean_y) / std_y
+    print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
 
     # only target at q (4) and s (5)
     Y = Y[:, 4:6]
-    # mean_y = mean_y[4:6]
-    # std_y = std_y[4:6]
+    mean_y = mean_y[4:6]
+    std_y = std_y[4:6]
     
     #
     # adaptive normalize is not compatible with irregular data, ABANDONED
@@ -124,6 +124,9 @@ if __name__ == '__main__':
 
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
     train_rand_dataloader = DataLoader(train_rand_dataset, batch_size=args.batch_size, shuffle=False)
+
+    train_mix_dataset = torch.utils.data.TensorDataset(torch.cat([train_coeffs, train_rand_coeffs], dim=0), Y[:train_size].repeat(2, 1))
+    train_mix_dataloader = DataLoader(train_mix_dataset, batch_size=args.batch_size, shuffle=True)
 
     test_logsig = torchcde.logsig_windows(X_even[(-test_size):, :, :].float().to(device), depth, window_length=window_length)
     test_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(test_logsig)
@@ -189,13 +192,13 @@ if __name__ == '__main__':
         print(f'Epoch {epoch}, Learning Rate {lr}')
         writer.add_scalar('learning_rate', lr, epoch)
         
-        if epoch % 2 == 0:
-            e_dataloader = train_dataloader
-            print('Using regular data')
-        else:
-            e_dataloader = train_rand_dataloader
-            print('Using irregular data')
-        # e_dataloader = train_dataloader
+        # if epoch % 2 == 0:
+        #     e_dataloader = train_dataloader
+        #     print('Using regular data')
+        # else:
+        #     e_dataloader = train_rand_dataloader
+        #     print('Using irregular data')
+        e_dataloader = train_mix_dataloader
             
         for i, (batch_coeffs, batch_y) in enumerate(e_dataloader):
 
@@ -206,8 +209,8 @@ if __name__ == '__main__':
 
             pred_y = model(batch_coeffs)
 
-            mse_log10q = torch.mean((batch_y[:, 0] / np.log(10) - pred_y[:, 0] / np.log(10))**2).detach().cpu()
-            mse_log10s = torch.mean((batch_y[:, 1] / np.log(10) - pred_y[:, 1] / np.log(10))**2).detach().cpu()
+            mse_log10q = torch.mean((batch_y[:, 0] / np.log(10) - pred_y[:, 0] / np.log(10))**2).detach().cpu() * std_y[0]
+            mse_log10s = torch.mean((batch_y[:, 1] / np.log(10) - pred_y[:, 1] / np.log(10))**2).detach().cpu() * std_y[1]
             
             loss = loss_func(pred_y, batch_y)
             loss.backward()
@@ -228,11 +231,11 @@ if __name__ == '__main__':
             writer.add_scalar('mse/batch_mse_log10q', mse_log10q.item(), (i + epoch * num_batches))
             writer.add_scalar('mse/batch_mse_log10s', mse_log10s.item(), (i + epoch * num_batches))
 
-            for param_group in optimizer.param_groups:
-                lr = param_group['lr']
-                if lr < args.lr * 50:
-                    lr = lr * 2
-                param_group['lr'] = lr
+            # for param_group in optimizer.param_groups:
+            #     lr = param_group['lr']
+            #     if lr < args.lr * 1e2:
+            #         lr = lr * 2
+            #     param_group['lr'] = lr
 
             if (i + epoch * num_batches) % 20 == 0:
                 model.eval()
@@ -246,14 +249,14 @@ if __name__ == '__main__':
                     pred_y = model(test_coeffs)
                     loss = loss_func(pred_y, test_Y)
 
-                    mse_log10q = torch.mean((test_Y[:, 0] / np.log(10) - pred_y[:, 0] / np.log(10))**2).detach().cpu()
-                    mse_log10s = torch.mean((test_Y[:, 1] / np.log(10) - pred_y[:, 1] / np.log(10))**2).detach().cpu()
+                    mse_log10q = torch.mean((test_Y[:, 0] / np.log(10) - pred_y[:, 0] / np.log(10))**2).detach().cpu() * std_y[0]
+                    mse_log10s = torch.mean((test_Y[:, 1] / np.log(10) - pred_y[:, 1] / np.log(10))**2).detach().cpu() * std_y[1]
 
                     pred_y_rand = model(test_rand_coeffs)
                     loss_rand = loss_func(pred_y_rand, test_Y)
 
-                    mse_log10q_rand = torch.mean((test_Y[:, 0] / np.log(10) - pred_y_rand[:, 0] / np.log(10))**2).detach().cpu()
-                    mse_log10s_rand = torch.mean((test_Y[:, 1] / np.log(10) - pred_y_rand[:, 1] / np.log(10))**2).detach().cpu()
+                    mse_log10q_rand = torch.mean((test_Y[:, 0] / np.log(10) - pred_y_rand[:, 0] / np.log(10))**2).detach().cpu() * std_y[0]
+                    mse_log10s_rand = torch.mean((test_Y[:, 1] / np.log(10) - pred_y_rand[:, 1] / np.log(10))**2).detach().cpu() * std_y[1]
 
                     message = f'Epoch {(i + epoch * num_batches)/20}, Test Loss {loss.item()}, mse_log10q {mse_log10q.item()}, mse_log10s {mse_log10s.item()}, loss_rand {loss_rand.item()}, mse_log10q_rand {mse_log10q_rand.item()}, mse_log10s_rand {mse_log10s_rand.item()}'
                     writer.add_scalar('loss/test_loss', loss.item(), (i + epoch * num_batches)/20)
