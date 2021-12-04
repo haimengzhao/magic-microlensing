@@ -36,7 +36,7 @@ parser.add_argument('-u', '--units', type=int, default=1024, help="Number of uni
 
 args = parser.parse_args()
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -63,7 +63,7 @@ if __name__ == '__main__':
         input_command = input_command[:ind] + input_command[(ind+2):]
     input_command = " ".join(input_command)
 
-    writer = SummaryWriter(log_dir=f'/work/hmzhao/tbxdata/l{args.latents}_Mix_qs_{experimentID}')
+    writer = SummaryWriter(log_dir=f'/work/hmzhao/tbxdata/logsig_qs_{experimentID}')
 
     ##################################################################
     print(f'Loading Data: {args.dataset}')
@@ -79,18 +79,19 @@ if __name__ == '__main__':
     # # normalize
     Y[:, 3:6] = torch.log(Y[:, 3:6])
     Y[:, -1] = torch.cos(Y[:, -1] / 180 * 3.1415926)
-    mean_y = torch.mean(Y, axis=0)
-    std_y = torch.std(Y, axis=0)
-    std_mask = (std_y==0)
-    std_y[std_mask] = 1
-    print(f'Y mean: {mean_y}\nY std: {std_y}')
-    Y = (Y - mean_y) / std_y
-    print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
+    # mean_y = torch.mean(Y, axis=0)
+    # std_y = torch.std(Y, axis=0)
+    # std_mask = (std_y==0)
+    # std_y[std_mask] = 1
+    # print(f'Y mean: {mean_y}\nY std: {std_y}')
+    # Y = (Y - mean_y) / std_y
+    # print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
 
     # only target at q (4) and s (5)
     Y = Y[:, 4:6]
-    mean_y = mean_y[4:6]
-    std_y = std_y[4:6]
+    # mean_y = mean_y[4:6]
+    # std_y = std_y[4:6]
+    std_y = torch.tensor([1., 1.])
     
     #
     # adaptive normalize is not compatible with irregular data, ABANDONED
@@ -199,6 +200,7 @@ if __name__ == '__main__':
         #     e_dataloader = train_rand_dataloader
         #     print('Using irregular data')
         e_dataloader = train_mix_dataloader
+        num_batches = len(e_dataloader)
             
         for i, (batch_coeffs, batch_y) in enumerate(e_dataloader):
 
