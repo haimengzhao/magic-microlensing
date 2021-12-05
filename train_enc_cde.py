@@ -23,7 +23,7 @@ parser.add_argument('--niters', type=int, default=1000)
 parser.add_argument('--lr',  type=float, default=4e-6, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
-parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
+parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-2.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
@@ -36,7 +36,7 @@ parser.add_argument('-u', '--units', type=int, default=1024, help="Number of uni
 
 args = parser.parse_args()
 
-device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -63,7 +63,7 @@ if __name__ == '__main__':
         input_command = input_command[:ind] + input_command[(ind+2):]
     input_command = " ".join(input_command)
 
-    writer = SummaryWriter(log_dir=f'/work/hmzhao/tbxdata/logsig_qs_{experimentID}')
+    writer = SummaryWriter(log_dir=f'/work/hmzhao/tbxdata/logsig_qs_orthinit_{experimentID}')
 
     ##################################################################
     print(f'Loading Data: {args.dataset}')
@@ -150,7 +150,7 @@ if __name__ == '__main__':
     # Load checkpoint and evaluate the model
     if args.load is not None:
         # Load checkpoint.
-        checkpt = torch.load(ckpt_path)
+        checkpt = torch.load(ckpt_path, map_location='cpu')
         ckpt_args = checkpt['args']
         state_dict = checkpt['state_dict']
         model_dict = model.state_dict()
@@ -174,9 +174,9 @@ if __name__ == '__main__':
 
     optimizer = optim.Adam(
         [
-            {"params": model.initial.parameters(), "lr": args.lr * 1e2},
+            {"params": model.initial.parameters(), "lr": args.lr*1e2},
             {"params": model.cde_func.parameters(), "lr": args.lr},
-            {"params": model.readout.parameters(), "lr": args.lr * 1e2},
+            {"params": model.readout.parameters(), "lr": args.lr*1e2},
         ],
         lr=args.lr
         )

@@ -53,6 +53,7 @@ class CDEEncoder(nn.Module):
         self.latent_dim = latent_dim
 
         self.cde_func = CDEFunc(input_dim, latent_dim)
+        utils.init_network_weights(self.cde_func, method=nn.init.orthogonal_)
         self.initial = nn.Sequential(
             utils.create_net(input_dim, 1024, n_layers=0, n_units=1024, nonlinear=nn.ReLU),
             *[utils.ResBlock(1024, 1024, nonlinear=nn.ReLU) for i in range(3)],
