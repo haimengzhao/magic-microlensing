@@ -105,21 +105,28 @@ def simulate_lc(
         chi2 = event_single.get_chi2()
         # print("chi^2 single: {:.2f}".format(chi2))
 
-        if chi2 > 1500:
+        if chi2 > 144./0.01:
             return np.stack([times, data.mag, data.err_mag], axis=-1).reshape(1, -1, 3)
         else: 
             return None
     else:
         return np.stack([times, data.mag], axis=-1).reshape(1, -1, 2)
 
-def generate_random_parameter_set(u0_max=1, max_iter=100, t_0=0, t_E=50):
+def generate_random_parameter_set(u0_max=2, max_iter=100):
     ''' generate a random set of parameters. '''
 
-    # simulate -2tE to 2tE, with t0=0
+    # OUTDATED: simulate -2tE to 2tE, with t0=0
+    # t_0=0; t_E=50
+
+    # new
+
+    t_0 = random.uniform(0, 72)
+    t_E = np.clip(random.lognormvariate(1.15, 0.45), 1, 100)
+    f_s = 10.**random.uniform(-1, 0)
 
     rho = 10.**random.uniform(-4, -2) # log-flat between 1e-4 and 1e-2
-    q = 10.**random.uniform(-4, 0) # including both planetary & binary events
-    s = 10.**random.uniform(np.log10(0.3), np.log10(3))
+    q = 10.**random.uniform(-6, 0) # including both planetary & binary events
+    s = 10.**random.uniform(np.log10(0.2), np.log10(5))
     alpha = random.uniform(0, 360) # 0-360 degrees
     ## use Penny (2014) parameterization for small-q binaries ##
     if q < 1e-3:
@@ -157,9 +164,9 @@ def generate_random_parameter_set(u0_max=1, max_iter=100, t_0=0, t_E=50):
         'q': q, 
         's': s, 
         'alpha': alpha,
-    }
+    }, f_s
 
-def simulate_batch(batch_size, t_0, t_E, relative_uncertainty, time_settings_random, time_settings_even, methods, log_path, b):
+def simulate_batch(batch_size, relative_uncertainty, time_settings_random, time_settings_even, methods, log_path, b):
     '''
     Simulate a batch of lightcurves
 
@@ -176,15 +183,15 @@ def simulate_batch(batch_size, t_0, t_E, relative_uncertainty, time_settings_ran
     time_start = time.time()
     X_random = np.empty((batch_size, time_settings_random['n_epochs'], 3))
     X_even = np.empty((batch_size, time_settings_even['n_epochs'], 2))
-    Y = np.empty((batch_size, 7))
-    # t_0, t_E, u_0, rho, q, s, alpha
+    Y = np.empty((batch_size, 8))
+    # t_0, t_E, u_0, rho, q, s, alpha, f_s
     num_lc = 0
 
     print(f'Simulating batch {b}:\n' + '#'*50 + '\n')
     pbar = tqdm(total=100)
     while num_lc < batch_size:
-        parameters = generate_random_parameter_set(t_0=t_0, t_E=t_E)
-        Y[num_lc] = list(parameters.values())
+        parameters, f_s= generate_random_parameter_set()
+        Y[num_lc] = list(parameters.values()) + [f_s]
 
         settings_random = {
             'parameters': parameters,
@@ -198,9 +205,11 @@ def simulate_batch(batch_size, t_0, t_E, relative_uncertainty, time_settings_ran
             'methods': methods,
         }
 
-        lc_random = simulate_lc(**settings_random, relative_uncertainty=relative_uncertainty, plot=False)
+        lc_random = simulate_lc(**settings_random, 
+            flux_source=1000, flux_blending=1000*(1-f_s)/f_s, relative_uncertainty=relative_uncertainty, plot=False)
         if type(lc_random) == np.ndarray:
-            lc_even = simulate_lc(**settings_even, relative_uncertainty=0, plot=False)
+            lc_even = simulate_lc(**settings_even, 
+                flux_source=1000, flux_blending=1000*(1-f_s)/f_s,relative_uncertainty=0, plot=False)
             X_random[num_lc] = lc_random
             X_even[num_lc] = lc_even
             num_lc += 1
@@ -223,13 +232,13 @@ def simulate_batch(batch_size, t_0, t_E, relative_uncertainty, time_settings_ran
 
     pbar.close()
 
-    with h5py.File(f'/work/hmzhao/irregular-lc/random-even-batch-{b}.h5', 'w') as opt:
+    with h5py.File(f'/work/hmzhao/irregular-lc/roman-{b}.h5', 'w') as opt:
         opt['X_random'] = X_random
         opt['X_even'] = X_even
         opt['Y'] = Y
     
     time_end = time.time()
-    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/random-even-batch-{b}.h5, size {batch_size}, use time: {time_end - time_start}s\n')
+    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/roman-{b}.h5, size {batch_size}, use time: {time_end - time_start}s\n')
     log.close()
 
         
@@ -245,9 +254,10 @@ if __name__ == '__main__':
     # num_of_resample = int(sys.argv[4])
     log_path = sys.argv[4]
 
-    num_of_points_perlc_random = 200
-    num_of_points_perlc_even = 1000
-    t_0 = 0; t_E = 50; t_start = -2*t_E; t_stop = 2*t_E; 
+    num_of_points_perlc_random = int(144. / 0.01)
+    num_of_points_perlc_even = int(144. / 0.01)
+    # t_0 = 0; t_E = 50; 
+    t_start = 0; t_stop = 72; 
     relative_uncertainty = 0.01; 
 
     time_settings_random = {
@@ -269,7 +279,7 @@ if __name__ == '__main__':
     log.close()
 
     pool = Pool(num_of_cpus)
-    pool.map(partial(simulate_batch, batch_size, t_0, t_E, relative_uncertainty, 
+    pool.map(partial(simulate_batch, batch_size, relative_uncertainty, 
                         time_settings_random, time_settings_even,
                         methods, log_path), 
                 range(num_of_batch))
