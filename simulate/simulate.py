@@ -61,56 +61,60 @@ def simulate_lc(
             Plot the data and model at the end?
 
     """
-    model = mm.Model(parameters, coords=coords)
+    try:
+        model = mm.Model(parameters, coords=coords)
 
-    if time_settings['type'] == 'random':
-        raw = np.random.rand(time_settings['n_epochs'])
-        dt = time_settings['t_stop'] - time_settings['t_start']
-        times = time_settings['t_start'] + np.sort(raw) * dt
-    elif time_settings['type'] == 'evenly spaced':
-        times = model.set_times(t_start=time_settings['t_start'],
-                                    t_stop=time_settings['t_stop'],
-                                    n_epochs=time_settings['n_epochs'])
-    else:
-        raise ValueError("unrecognized time_settings['type']: " +
-                         time_settings['type'])
+        if time_settings['type'] == 'random':
+            raw = np.random.rand(time_settings['n_epochs'])
+            dt = time_settings['t_stop'] - time_settings['t_start']
+            times = time_settings['t_start'] + np.sort(raw) * dt
+        elif time_settings['type'] == 'evenly spaced':
+            times = model.set_times(t_start=time_settings['t_start'],
+                                        t_stop=time_settings['t_stop'],
+                                        n_epochs=time_settings['n_epochs'])
+        else:
+            raise ValueError("unrecognized time_settings['type']: " +
+                            time_settings['type'])
 
-    if methods is not None:
-        model.set_magnification_methods(methods)
+        if methods is not None:
+            model.set_magnification_methods(methods)
 
-    magnification = model.get_magnification(times)
+        magnification = model.get_magnification(times)
 
-    flux = flux_source * magnification + flux_blending
-    flux_err = relative_uncertainty * flux
+        flux = flux_source * magnification + flux_blending
+        flux_err = relative_uncertainty * flux
 
-    flux *= 1 + relative_uncertainty * np.random.randn(len(flux))
+        flux *= 1 + relative_uncertainty * np.random.randn(len(flux))
 
-    data = mm.MulensData([times, flux, flux_err], phot_fmt='flux')
-    # event = mm.Event([data], model)
-    # print("chi^2: {:.2f}".format(event.get_chi2()))
+        data = mm.MulensData([times, flux, flux_err], phot_fmt='flux')
+        # event = mm.Event([data], model)
+        # print("chi^2: {:.2f}".format(event.get_chi2()))
 
-    # np.savetxt(file_out,
-    #            np.array([times, data.mag, data.err_mag]).T,
-    #            fmt='%.4f')
+        # np.savetxt(file_out,
+        #            np.array([times, data.mag, data.err_mag]).T,
+        #            fmt='%.4f')
 
-    if plot:
-        model.plot_lc(t_start=np.min(times), t_stop=np.max(times),
-                      source_flux=flux_source, blend_flux=flux_blending)
-        data.plot(phot_fmt='mag')
-        plt.savefig('./test.png')
+        if plot:
+            model.plot_lc(t_start=np.min(times), t_stop=np.max(times),
+                        source_flux=flux_source, blend_flux=flux_blending)
+            data.plot(phot_fmt='mag')
+            plt.savefig('./test.png')
 
-    if time_settings['type'] == 'random':
-        single = mm.Model({'t_0': parameters['t_0'], 'u_0': parameters['u_0'], 't_E': parameters['t_E']})
-        event_single = mm.Event([data], single)
-        chi2 = event_single.get_chi2()
-        # print("chi^2 single: {:.2f}".format(chi2))
+        if time_settings['type'] == 'random':
+            single = mm.Model({'t_0': parameters['t_0'], 'u_0': parameters['u_0'], 't_E': parameters['t_E']})
+            event_single = mm.Event([data], single)
+            chi2 = event_single.get_chi2()
+            # print("chi^2 single: {:.2f}".format(chi2))
 
-        if chi2 > 144./0.01:
-            return np.stack([times, data.mag, data.err_mag], axis=-1).reshape(1, -1, 3)
-        else: 
-            return None
-    else:
-        return np.stack([times, data.mag], axis=-1).reshape(1, -1, 2)
+            if chi2 > 72./0.01:
+                return np.stack([times, data.mag, data.err_mag], axis=-1).reshape(1, -1, 3)
+            else: 
+                return None
+        else:
+            return np.stack([times, data.mag], axis=-1).reshape(1, -1, 2)
+    except:
+        print('Error occurred, but continue')
+        return None
 
 def generate_random_parameter_set(u0_max=2, max_iter=100):
     ''' generate a random set of parameters. '''
@@ -120,8 +124,8 @@ def generate_random_parameter_set(u0_max=2, max_iter=100):
 
     # new
 
-    t_0 = random.uniform(0, 72)
-    t_E = np.clip(random.lognormvariate(1.15, 0.45), 1, 100)
+    t_E = 10.**random.uniform(0, 1)
+    t_0 = random.uniform(0 + 3 * t_E, 72 - 3 * t_E)
     f_s = 10.**random.uniform(-1, 0)
 
     rho = 10.**random.uniform(-4, -2) # log-flat between 1e-4 and 1e-2
@@ -254,8 +258,8 @@ if __name__ == '__main__':
     # num_of_resample = int(sys.argv[4])
     log_path = sys.argv[4]
 
-    num_of_points_perlc_random = int(144. / 0.01)
-    num_of_points_perlc_even = int(144. / 0.01)
+    num_of_points_perlc_random = int(72. / 0.01)
+    num_of_points_perlc_even = int(72. / 0.01)
     # t_0 = 0; t_E = 50; 
     t_start = 0; t_stop = 72; 
     relative_uncertainty = 0.01; 
