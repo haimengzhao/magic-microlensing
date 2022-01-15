@@ -213,10 +213,11 @@ def simulate_batch(batch_size, relative_uncertainty, time_settings_random, time_
             flux_source=1000, flux_blending=1000*(1-f_s)/f_s, relative_uncertainty=relative_uncertainty, plot=False)
         if type(lc_random) == np.ndarray:
             lc_even = simulate_lc(**settings_even, 
-                flux_source=1000, flux_blending=1000*(1-f_s)/f_s,relative_uncertainty=0, plot=False)
-            X_random[num_lc] = lc_random
-            X_even[num_lc] = lc_even
-            num_lc += 1
+                flux_source=1000, flux_blending=1000*(1-f_s)/f_s, relative_uncertainty=0, plot=False)
+            if type(lc_even) == np.ndarray:
+                X_random[num_lc] = lc_random
+                X_even[num_lc] = lc_even
+                num_lc += 1
 
             # ABANDONED: resample
             # if num_resample > 0:

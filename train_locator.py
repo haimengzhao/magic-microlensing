@@ -18,12 +18,13 @@ import torchcde
 
 from tensorboardX import SummaryWriter
 
+import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser('Locator')
 parser.add_argument('--niters', type=int, default=1000)
-parser.add_argument('--lr',  type=float, default=4e-6, help="Starting learning rate")
+parser.add_argument('--lr',  type=float, default=4e-5, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
-parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/work/hmzhao/irregular-lc/roman-0.h5', help="Path for dataset")
+parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/locator/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
@@ -33,7 +34,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -71,18 +72,32 @@ if __name__ == '__main__':
 
     test_size = 1024
     train_size = len(Y) - test_size
-    # train_size = 128 * 16
+    # train_size = 128
 
     # preprocess
+    nanind = torch.where(~torch.isnan(X_even[:, 0, 1]))[0]
     # Y: t_0, t_E, u_0, rho, q, s, alpha, f_s
     Y = Y[:, [0, 1, -1]] # locator predicts t_0, t_E and f_s
     Y[:, -1] = torch.log10(Y[:, -1])
+    std_Y = torch.tensor([1, 1, 1])
+    Y = Y / std_Y
+    Y = Y[nanind]
+    # Y = Y[:, [0]]
     
     # discard uncertainty bar
+    X_even = X_even[nanind]
+    X_rand = X_rand[nanind]
+
+    # mean_x_even = 13.0
+    # std_x_even = 0.7
+    # X_even[:, :, 1] = (X_even[:, :, 1] - mean_x_even) / std_x_even
+    # print(f'normalized X mean: {torch.mean(X_even[:, :, 1])}\nX std: {torch.mean(torch.std(X_even[:, :, 1], axis=0))}')
+
     X_rand = X_rand[:, :, :2]
+    # X_rand[:, :, 1] = (X_rand[:, :, 1] - mean_x_even) / std_x_even
  
     # CDE interpolation with log_sig
-    depth = 3; window_length = 72; window_length_rand = 72
+    depth = 5; window_length = 72; window_length_rand = 72
     train_logsig = torchcde.logsig_windows(X_even[:train_size, :, :], depth, window_length=window_length)
     train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig)
 
@@ -139,15 +154,15 @@ if __name__ == '__main__':
     
     logger = utils.get_logger(logpath=log_path, filepath=os.path.abspath(__file__))
     logger.info(input_command)
-    logger.info("Experiment Locator" + str(experimentID))
+    logger.info("Experiment Locator " + str(experimentID))
 
     optimizer = optim.Adam(
         [
-            {"params": model.initial.parameters(), "lr": args.lr*1e2},
-            {"params": model.cde_func.parameters(), "lr": args.lr},
-            {"params": model.readout.parameters(), "lr": args.lr*1e2},
+            {"params": model.initial.parameters(), "lr": args.lr*0},
+            {"params": model.cde_func.parameters(), "lr": args.lr*1e-1},
+            {"params": model.readout.parameters(), "lr": args.lr*0},
         ],
-        lr=args.lr
+        lr=0, weight_decay=1e-2,
         )
     # optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
     # optimizer = optim.SGD(model.parameters(), lr=args.lr)
@@ -168,7 +183,8 @@ if __name__ == '__main__':
         # else:
         #     e_dataloader = train_rand_dataloader
         #     print('Using irregular data')
-        e_dataloader = train_mix_dataloader
+        # e_dataloader = train_mix_dataloader
+        e_dataloader = train_dataloader
         num_batches = len(e_dataloader)
             
         for i, (batch_coeffs, batch_y) in enumerate(e_dataloader):
@@ -180,7 +196,7 @@ if __name__ == '__main__':
 
             pred_y = model(batch_coeffs)
 
-            mse = torch.mean((batch_y - pred_y)**2, dim=-1).detach().cpu().item()
+            mse = torch.mean((batch_y - pred_y)**2, dim=0).detach().cpu() * (std_Y**2)
             
             loss = loss_func(pred_y, batch_y)
             loss.backward()
@@ -196,7 +212,7 @@ if __name__ == '__main__':
 
             optimizer.step()
 
-            print(f'batch {i}/{num_batches}, loss {loss.item()}, mse_log10q {mse_log10q.item()}, mse_log10s {mse_log10s.item()}')
+            print(f'batch {i}/{num_batches}, loss {loss.item()}, mse_t0, tE, log10fs {mse}')
             writer.add_scalar('loss/batch_loss', loss.item(), (i + epoch * num_batches))
             writer.add_scalar('mse_batch/batch_mse_t0', mse[0], (i + epoch * num_batches))
             writer.add_scalar('mse_batch/batch_mse_tE', mse[1], (i + epoch * num_batches))
@@ -214,12 +230,12 @@ if __name__ == '__main__':
                     pred_y = model(test_coeffs)
                     loss = loss_func(pred_y, test_Y)
 
-                    mse = torch.mean((batch_y - pred_y)**2, dim=-1).detach().cpu().item()
+                    mse = torch.mean((test_Y - pred_y)**2, dim=0).detach().cpu() * (std_Y**2)
 
                     pred_y_rand = model(test_rand_coeffs)
                     loss_rand = loss_func(pred_y_rand, test_Y)
 
-                    mse_rand = torch.mean((batch_y - pred_y)**2, dim=-1).detach().cpu().item()
+                    mse_rand = torch.mean((test_Y - pred_y)**2, dim=0).detach().cpu() * (std_Y**2)
 
                     message = f'Epoch {(i + epoch * num_batches)/20}, Test Loss {loss.item()}, mse_t0, tE, log10fs {mse}, loss_rand {loss_rand.item()}, mse_t0, tE, log10fs_rand {mse_rand}'
                     writer.add_scalar('loss/test_loss', loss.item(), (i + epoch * num_batches)/20)
