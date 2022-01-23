@@ -1,4 +1,3 @@
-import imp
 import os
 import sys
 
@@ -13,14 +12,14 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 import model.utils as utils
-from model.locator import Locator
+from model.scaler import Scaler
 
 import torchcde
 
 from tensorboardX import SummaryWriter
 
 import matplotlib.pyplot as plt
-parser = argparse.ArgumentParser('Locator')
+parser = argparse.ArgumentParser('Scaler')
 parser.add_argument('--niters', type=int, default=1000)
 parser.add_argument('--lr',  type=float, default=4e-6, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
@@ -62,7 +61,7 @@ if __name__ == '__main__':
         input_command = input_command[:ind] + input_command[(ind+2):]
     input_command = " ".join(input_command)
 
-    writer = SummaryWriter(log_dir=f'/work/hmzhao/tbxdata/locator-{experimentID}')
+    writer = SummaryWriter(log_dir=f'/work/hmzhao/tbxdata/scaler-{experimentID}')
 
     ##################################################################
     print(f'Loading Data: {args.dataset}')
@@ -72,8 +71,8 @@ if __name__ == '__main__':
         X_rand = torch.tensor(dataset_file['X_random'][...])
 
     test_size = 1024
-    # train_size = len(Y) - test_size
-    train_size = 128
+    train_size = len(Y) - test_size
+    # train_size = 128
 
     # preprocess
     nanind = torch.where(~torch.isnan(X_even[:, 0, 1]))[0]
@@ -135,7 +134,7 @@ if __name__ == '__main__':
     del X_rand
     ##################################################################
     # Create the model
-    model = Locator(input_dim, latent_dim, output_dim, device).to(device)
+    model = Scaler(input_dim, latent_dim, output_dim, device).to(device)
     ##################################################################
     # Load checkpoint and evaluate the model
     if args.load is not None:
@@ -165,9 +164,8 @@ if __name__ == '__main__':
     optimizer = optim.Adam(
         [
             {"params": model.initial.parameters(), "lr": args.lr*1e0},
-            {"params": model.cde_func.parameters(), "lr": args.lr*1e0},
-            {"params": model.cde_func_r.parameters(), "lr": args.lr*1e0},
-            {"params": model.readout.parameters(), "lr": args.lr*1e0}
+            {"params": model.cnn_featurizer.parameters(), "lr": args.lr*1e0},
+            {"params": model.regressor.parameters(), "lr": args.lr*1e0}
         ],
         lr=args.lr, weight_decay=0,
         )
@@ -208,7 +206,7 @@ if __name__ == '__main__':
             loss = loss_func(pred_y, batch_y)
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=20)
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=20)
             total_norm = 0
             parameters = [p for p in model.parameters() if p.grad is not None and p.requires_grad]
             for p in parameters:

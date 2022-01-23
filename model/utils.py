@@ -54,6 +54,32 @@ class ResBlock(nn.Module):
         
         return out
 
+class CNNResBlock(nn.Module):
+    def __init__(self, dim, hidden_dim, nonlinear=nn.PReLU, layernorm=False):
+        super(CNNResBlock, self).__init__()
+        self.linear1 = nn.Conv1d(dim, hidden_dim, kernel_size=1, stride=1)
+        self.nonlinear1 = nonlinear()
+        self.linear2 = nn.Conv1d(hidden_dim, dim, kernel_size=3, stride=1, padding=1)
+
+        self.layernorm = layernorm
+        if layernorm:
+            self.layernorm = nn.LayerNorm(dim)
+
+    def forward(self, x):
+        residual = x
+
+        out = self.linear1(x)
+        out = self.nonlinear1(out)
+
+        out = self.linear2(out)
+
+        if self.layernorm:
+            out = self.layernorm(out)
+
+        out += residual
+        
+        return out
+
 def create_net(n_inputs, n_outputs, n_layers = 1, n_units = 100, nonlinear = nn.ReLU, normalize=False):
     '''
     Create a fully connected net:
