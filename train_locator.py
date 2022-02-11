@@ -1,4 +1,3 @@
-import imp
 import os
 import sys
 
@@ -22,7 +21,7 @@ from tensorboardX import SummaryWriter
 import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser('Locator')
 parser.add_argument('--niters', type=int, default=1000)
-parser.add_argument('--lr',  type=float, default=4e-6, help="Starting learning rate")
+parser.add_argument('--lr',  type=float, default=4e-3, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0.h5', help="Path for dataset")
@@ -83,11 +82,11 @@ if __name__ == '__main__':
     Y[:, -3] = torch.log10(Y[:, -3])
     Y[:, -4] = torch.log10(Y[:, -4])
     Y[:, -5] = torch.log10(Y[:, -5])
-    std_Y = torch.tensor([50, 5, 1, 1, 1, 0.1, 360, 1])
+    std_Y = torch.tensor([1, 1, 1, 1, 1, 0.1, 360, 1])
     Y = Y / std_Y
     Y = Y[nanind]
-    Y = Y[:, [-1]]
-    std_Y = std_Y[[-1]]
+    Y = Y[:, [0, 1]]
+    std_Y = std_Y[[0, 1]]
     
     # discard uncertainty bar
     X_even = X_even[nanind]
@@ -104,9 +103,11 @@ if __name__ == '__main__':
     # CDE interpolation with log_sig
     depth = 2; window_length = 1; window_length_rand = 1
     train_logsig = torchcde.logsig_windows(X_even[:train_size, :, :], depth, window_length=window_length)
+    # train_logsig = X_even[:train_size, :, :]
     train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig)
 
     train_logsig_rand = torchcde.logsig_windows(X_rand[:train_size, :, :], depth, window_length=window_length_rand)
+    # train_logsig_rand = X_rand[:train_size, :, :]
     train_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig_rand)
 
     train_dataset = torch.utils.data.TensorDataset(train_coeffs, Y[:train_size])
@@ -119,11 +120,19 @@ if __name__ == '__main__':
     train_mix_dataloader = DataLoader(train_mix_dataset, batch_size=args.batch_size, shuffle=True)
 
     test_logsig = torchcde.logsig_windows(X_even[(-test_size):, :, :].float().to(device), depth, window_length=window_length)
+    # test_logsig = X_even[(-test_size):, :, :].float().to(device)
     test_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(test_logsig)
     test_Y = Y[(-test_size):].float().to(device)
     
     test_logsig_rand = torchcde.logsig_windows(X_rand[(-test_size):, :, :].float().to(device), depth, window_length=window_length_rand)
+    # test_logsig_rand = X_rand[(-test_size):, :, :].float().to(device)
     test_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(test_logsig_rand).float().to(device)
+
+    rescaley = (test_Y / 72 * 4000).int()
+    left = rescaley[:, [0]] - 2*rescaley[:, [1]]
+    right = rescaley[:, [0]] + 2*rescaley[:, [1]]
+    ztest = torch.tile(torch.arange(0, 4000).unsqueeze(0), (len(test_Y), 1)).to(device)
+    ztest = ((ztest > left)*(ztest<right)).int()
 
     output_dim = Y.shape[-1]
     input_dim = train_logsig.shape[-1]
@@ -164,10 +173,10 @@ if __name__ == '__main__':
 
     optimizer = optim.Adam(
         [
-            {"params": model.initial.parameters(), "lr": args.lr*1e0},
-            {"params": model.cde_func.parameters(), "lr": args.lr*1e0},
-            {"params": model.cde_func_r.parameters(), "lr": args.lr*1e0},
-            {"params": model.readout.parameters(), "lr": args.lr*1e0}
+            {"params": model.parameters(), "lr": args.lr*1e0},
+            # {"params": model.cde_func.parameters(), "lr": args.lr*1e0},
+            # {"params": model.cde_func_r.parameters(), "lr": args.lr*1e0},
+            # {"params": model.readout.parameters(), "lr": args.lr*1e0}
         ],
         lr=args.lr, weight_decay=0,
         )
@@ -199,14 +208,22 @@ if __name__ == '__main__':
             batch_y = batch_y.float().to(device)
             batch_coeffs = batch_coeffs.float().to(device)
 
+            rescaley = (batch_y / 72 * 4000).int()
+            left = rescaley[:, [0]] - 2*rescaley[:, [1]]
+            right = rescaley[:, [0]] + 2*rescaley[:, [1]]
+            z = torch.tile(torch.arange(0, 4000).unsqueeze(0), (len(batch_y), 1)).to(device)
+            z = ((z > left)*(z<right)).int()
+
             optimizer.zero_grad()
 
-            pred_y = model(batch_coeffs)
+            pred_y, mse_z = model(batch_coeffs, z)
 
             mse = torch.mean((batch_y - pred_y)**2, dim=0).detach().cpu() * (std_Y**2)
             
             loss = loss_func(pred_y, batch_y)
-            loss.backward()
+            loss_z = loss/1000 + mse_z
+            mse_z.backward()
+            print(mse_z, loss_z)
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=20)
             total_norm = 0
@@ -234,12 +251,12 @@ if __name__ == '__main__':
                 print(f'Model saved to {ckpt_path}')
 
                 with torch.no_grad():
-                    pred_y = model(test_coeffs)
+                    pred_y, mse_z = model(test_coeffs, ztest)
                     loss = loss_func(pred_y, test_Y)
 
                     mse = torch.mean((test_Y - pred_y)**2, dim=0).detach().cpu() * (std_Y**2)
 
-                    pred_y_rand = model(test_rand_coeffs)
+                    pred_y_rand, mse_z = model(test_rand_coeffs, ztest)
                     loss_rand = loss_func(pred_y_rand, test_Y)
 
                     mse_rand = torch.mean((test_Y - pred_y_rand)**2, dim=0).detach().cpu() * (std_Y**2)
