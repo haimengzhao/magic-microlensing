@@ -71,8 +71,8 @@ if __name__ == '__main__':
         X_rand = torch.tensor(dataset_file['X_random'][...])
 
     test_size = 1024
-    # train_size = len(Y) - test_size
-    train_size = 128
+    train_size = len(Y) - test_size
+    # train_size = 128
 
     # preprocess
     nanind = torch.where(~torch.isnan(X_even[:, 0, 1]))[0]
@@ -212,7 +212,7 @@ if __name__ == '__main__':
             left = rescaley[:, [0]] - 2*rescaley[:, [1]]
             right = rescaley[:, [0]] + 2*rescaley[:, [1]]
             z = torch.tile(torch.arange(0, 4000).unsqueeze(0), (len(batch_y), 1)).to(device)
-            z = ((z > left)*(z<right)).int()
+            z = ((z > left) * (z < right)).int()
 
             optimizer.zero_grad()
 
@@ -220,10 +220,9 @@ if __name__ == '__main__':
 
             mse = torch.mean((batch_y - pred_y)**2, dim=0).detach().cpu() * (std_Y**2)
             
-            loss = loss_func(pred_y, batch_y)
-            loss_z = loss/1000 + mse_z
-            mse_z.backward()
-            print(mse_z, loss_z)
+            # loss = loss_func(pred_y, batch_y)
+            loss = mse_z + loss_func(pred_y, batch_y)/10000
+            loss.backward()
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=20)
             total_norm = 0
@@ -238,8 +237,8 @@ if __name__ == '__main__':
 
             print(f'batch {i}/{num_batches}, loss {loss.item()}, mse_t0, tE, log10fs {mse}')
             writer.add_scalar('loss/batch_loss', loss.item(), (i + epoch * num_batches))
-            # writer.add_scalar('mse_batch/batch_mse_t0', mse[0], (i + epoch * num_batches))
-            # writer.add_scalar('mse_batch/batch_mse_tE', mse[1], (i + epoch * num_batches))
+            writer.add_scalar('mse_batch/batch_mse_t0', mse[0], (i + epoch * num_batches))
+            writer.add_scalar('mse_batch/batch_mse_tE', mse[1], (i + epoch * num_batches))
             # writer.add_scalar('mse_batch/batch_mse_log10fs', mse[2], (i + epoch * num_batches))
 
             if (i + epoch * num_batches) % 20 == 0:
@@ -252,23 +251,25 @@ if __name__ == '__main__':
 
                 with torch.no_grad():
                     pred_y, mse_z = model(test_coeffs, ztest)
-                    loss = loss_func(pred_y, test_Y)
+                    # loss = loss_func(pred_y, test_Y)
+                    loss = mse_z + loss_func(pred_y, test_Y)/10000
 
                     mse = torch.mean((test_Y - pred_y)**2, dim=0).detach().cpu() * (std_Y**2)
 
-                    pred_y_rand, mse_z = model(test_rand_coeffs, ztest)
-                    loss_rand = loss_func(pred_y_rand, test_Y)
+                    pred_y_rand, mse_z_rand = model(test_rand_coeffs, ztest)
+                    # loss_rand = loss_func(pred_y_rand, test_Y)
+                    loss_rand = mse_z_rand + loss_func(pred_y_rand, test_Y)/10000
 
                     mse_rand = torch.mean((test_Y - pred_y_rand)**2, dim=0).detach().cpu() * (std_Y**2)
 
                     message = f'Epoch {(i + epoch * num_batches)/20}, Test Loss {loss.item()}, mse_t0, tE, log10fs {mse}, loss_rand {loss_rand.item()}, mse_t0, tE, log10fs_rand {mse_rand}'
                     writer.add_scalar('loss/test_loss', loss.item(), (i + epoch * num_batches)/20)
                     writer.add_scalar('loss/test_loss_rand', loss_rand.item(), (i + epoch * num_batches)/20)
-                    # writer.add_scalar('mse/test_mse_t0', mse[0], (i + epoch * num_batches)/20)
-                    # writer.add_scalar('mse/test_mse_tE', mse[1], (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse/test_mse_t0', mse[0], (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse/test_mse_tE', mse[1], (i + epoch * num_batches)/20)
                     # writer.add_scalar('mse/test_mse_log10fs', mse[2], (i + epoch * num_batches)/20)
-                    # writer.add_scalar('mse_rand/test_mse_t0', mse_rand[0], (i + epoch * num_batches)/20)
-                    # writer.add_scalar('mse_rand/test_mse_tE', mse_rand[1], (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse_rand/test_mse_t0', mse_rand[0], (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse_rand/test_mse_tE', mse_rand[1], (i + epoch * num_batches)/20)
                     # writer.add_scalar('mse_rand/test_mse_log10fs', mse_rand[2], (i + epoch * num_batches)/20)
                     for name, param in model.named_parameters():
                         writer.add_histogram(name, param.clone().cpu().data.numpy(), (i + epoch * num_batches)/20)

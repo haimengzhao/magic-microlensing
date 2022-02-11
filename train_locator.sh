@@ -1,6 +1,6 @@
 #!/bin/bash
 #PBS -N train_locator
-#PBS -lselect=1:ncpus=1:mem=32gb:ngpus=1
+#PBS -lselect=1:ncpus=1:mem=64gb:ngpus=1
 #PBS -j oe
 
 cd $PBS_O_WORKDIR

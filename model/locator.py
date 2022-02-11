@@ -60,18 +60,20 @@ class Locator(nn.Module):
         z = self.unet(z)
         z = z.squeeze(-2)
 
-        mse_z = -torch.mean(zt*torch.log(z)+(1-zt)*torch.log(1-z))
+        mse_z = -torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10))
 
         # z = (z > 0.5).int()
         diffz = torch.diff(z, append=z[:, [-1]])
         timelist = X.evaluate(interval)[:, :, 0]
         plus = torch.sum(torch.abs(diffz) * timelist, dim=-1, keepdim=True)
         minus = torch.sum(diffz * timelist, dim=-1, keepdim=True)
+        reg = torch.hstack([plus / 2, -minus / 4])
 
-        plt.plot(timelist[0].cpu(), X.evaluate(interval)[0, :, 1].cpu())
-        plt.plot(timelist[0].cpu(), zt[0].cpu()+14)
-        plt.plot(timelist[0].cpu(), z[0].cpu().detach().numpy()+14)
-        plt.plot(timelist[0].cpu(), diffz[0].cpu().detach().numpy()+14)
-        plt.show()
+        # plt.plot(timelist[0].cpu(), X.evaluate(interval)[0, :, 1].cpu())
+        # plt.plot(timelist[0].cpu(), zt[0].cpu()+14)
+        # plt.plot(timelist[0].cpu(), z[0].cpu().detach().numpy()+14)
+        # plt.plot(timelist[0].cpu(), diffz[0].cpu().detach().numpy()+14)
+        # plt.show()
 
-        return torch.hstack([plus / 2, -minus / 4]), mse_z
+        # return torch.hstack([plus / 2, -minus / 4]), mse_z
+        return reg, mse_z
