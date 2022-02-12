@@ -3,14 +3,63 @@ import logging
 import torch
 import torch.nn as nn
 import numpy as np
+import torch.nn.functional as F
+
+class FocalLoss(nn.Module):
+    def __init__(self, gamma=0, alpha=None, size_average=True):
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+        self.alpha = alpha
+        if isinstance(alpha,(float,int)): self.alpha = torch.Tensor([alpha,1-alpha])
+        if isinstance(alpha,list): self.alpha = torch.Tensor(alpha)
+        self.size_average = size_average
+
+    def forward(self, input, target):
+        if input.dim()>2:
+            input = input.view(input.size(0),input.size(1),-1)  # N,C,H,W => N,C,H*W
+            input = input.transpose(1,2)    # N,C,H*W => N,H*W,C
+            input = input.contiguous().view(-1,input.size(2))   # N,H*W,C => N*H*W,C
+        target = target.view(-1,1)
+
+        logpt = F.log_softmax(input)
+        logpt = logpt.gather(1,target)
+        logpt = logpt.view(-1)
+        pt = logpt.data.exp()
+
+        if self.alpha is not None:
+            if self.alpha.type()!=input.data.type():
+                self.alpha = self.alpha.type_as(input.data)
+            at = self.alpha.gather(0,target.data.view(-1))
+            logpt = logpt * at
+
+        loss = -1 * (1-pt)**self.gamma * logpt
+        if self.size_average: return loss.mean()
+        else: return loss.sum()
+
+class SoftDiceLoss(nn.Module):
+    def __init__(self, weight=None, size_average=True):
+        super(SoftDiceLoss, self).__init__()
+ 
+    def forward(self, logits, targets):
+        num = targets.size(0)
+        smooth = 1
+        
+        probs = F.sigmoid(logits)
+        m1 = probs.view(num, -1)
+        m2 = targets.view(num, -1)
+        intersection = (m1 * m2)
+ 
+        score = (2. * intersection.sum(1) + smooth) / (m1.sum(1) + m2.sum(1) + smooth)
+        score = 1 - score.sum() / num
+        return score
 
 class conbr_block(nn.Module):
     def __init__(self, in_layer, out_layer, kernel_size, stride, dilation):
         super(conbr_block, self).__init__()
 
         self.conv1 = nn.Conv1d(in_layer, out_layer, kernel_size=kernel_size, stride=stride, dilation = dilation, padding = 3, bias=True)
-        self.bn = nn.BatchNorm1d(out_layer)
-        self.relu = nn.ReLU()
+        self.bn = nn.InstanceNorm1d(out_layer)
+        self.relu = nn.PReLU()
     
     def forward(self,x):
         x = self.conv1(x)
@@ -27,7 +76,7 @@ class se_block(nn.Module):
         self.conv2 = nn.Conv1d(out_layer//8, in_layer, kernel_size=1, padding=0)
         self.fc = nn.Linear(1,out_layer//8)
         self.fc2 = nn.Linear(out_layer//8,out_layer)
-        self.relu = nn.ReLU()
+        self.relu = nn.PReLU()
         self.sigmoid = nn.Sigmoid()
     
     def forward(self,x):

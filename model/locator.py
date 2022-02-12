@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.nn.modules.activation import Tanh
 
 import model.utils as utils
 
@@ -21,6 +20,7 @@ class Locator(nn.Module):
         self.n_intervals = 4000
         self.device = device
         self.unet = utils.UNET_1D(1, 128, 7, 3)
+        self.loss = utils.SoftDiceLoss()
        
     def forward(self, coeffs, zt):
         X = torchcde.CubicSpline(coeffs)
@@ -60,7 +60,8 @@ class Locator(nn.Module):
         z = self.unet(z)
         z = z.squeeze(-2)
 
-        mse_z = -torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10))
+        # mse_z = -torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10))
+        mse_z = (self.loss(z, zt)-torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10)))/2
 
         # z = (z > 0.5).int()
         diffz = torch.diff(z, append=z[:, [-1]])

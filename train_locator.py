@@ -34,7 +34,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:8" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -53,6 +53,8 @@ if __name__ == '__main__':
         experimentID = int(SystemRandom().random() * 100000)
     print(f'ExperimentID: {experimentID}')
     ckpt_path = os.path.join(args.save, "experiment_" + str(experimentID) + '.ckpt')
+    # ckpt_path_load = os.path.join(args.save, "experiment_" + '89670' + '.ckpt')
+    ckpt_path_load = ckpt_path
     
     input_command = sys.argv
     ind = [i for i in range(len(input_command)) if input_command[i] == "--load"]
@@ -149,7 +151,7 @@ if __name__ == '__main__':
     # Load checkpoint and evaluate the model
     if args.load is not None:
         # Load checkpoint.
-        checkpt = torch.load(ckpt_path, map_location='cpu')
+        checkpt = torch.load(ckpt_path_load, map_location='cpu')
         ckpt_args = checkpt['args']
         state_dict = checkpt['state_dict']
         model_dict = model.state_dict()
@@ -258,7 +260,7 @@ if __name__ == '__main__':
 
                     pred_y_rand, mse_z_rand = model(test_rand_coeffs, ztest)
                     # loss_rand = loss_func(pred_y_rand, test_Y)
-                    loss_rand = mse_z_rand + loss_func(pred_y_rand, test_Y)/10000
+                    loss_rand = mse_z_rand + loss_func(pred_y, test_Y)/10000
 
                     mse_rand = torch.mean((test_Y - pred_y_rand)**2, dim=0).detach().cpu() * (std_Y**2)
 
