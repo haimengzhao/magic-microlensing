@@ -21,6 +21,7 @@ class Locator(nn.Module):
         self.device = device
         self.unet = utils.UNET_1D(1, 128, 7, 3)
         self.loss = utils.SoftDiceLoss()
+        self.threshold = 0.4
        
     def forward(self, coeffs, zt):
         X = torchcde.CubicSpline(coeffs)
@@ -63,7 +64,7 @@ class Locator(nn.Module):
         # mse_z = -torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10))
         mse_z = (self.loss(z, zt)-torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10)))/2
 
-        # z = (z > 0.5).int()
+        z = (z > self.threshold).int()
         diffz = torch.diff(z, append=z[:, [-1]])
         timelist = X.evaluate(interval)[:, :, 0]
         plus = torch.sum(torch.abs(diffz) * timelist, dim=-1, keepdim=True)

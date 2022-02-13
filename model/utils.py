@@ -44,7 +44,7 @@ class SoftDiceLoss(nn.Module):
         num = targets.size(0)
         smooth = 1
         
-        probs = F.sigmoid(logits)
+        probs = torch.sigmoid(logits)
         m1 = probs.view(num, -1)
         m2 = targets.view(num, -1)
         intersection = (m1 * m2)

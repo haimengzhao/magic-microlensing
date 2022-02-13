@@ -34,7 +34,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:8" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -201,8 +201,8 @@ if __name__ == '__main__':
         # else:
         #     e_dataloader = train_rand_dataloader
         #     print('Using irregular data')
-        # e_dataloader = train_mix_dataloader
-        e_dataloader = train_dataloader
+        e_dataloader = train_mix_dataloader
+        # e_dataloader = train_dataloader
         num_batches = len(e_dataloader)
             
         for i, (batch_coeffs, batch_y) in enumerate(e_dataloader):
@@ -223,7 +223,7 @@ if __name__ == '__main__':
             mse = torch.mean((batch_y - pred_y)**2, dim=0).detach().cpu() * (std_Y**2)
             
             # loss = loss_func(pred_y, batch_y)
-            loss = mse_z + loss_func(pred_y, batch_y)/10000
+            loss = mse_z + loss_func(pred_y, batch_y)
             loss.backward()
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=20)
@@ -254,13 +254,13 @@ if __name__ == '__main__':
                 with torch.no_grad():
                     pred_y, mse_z = model(test_coeffs, ztest)
                     # loss = loss_func(pred_y, test_Y)
-                    loss = mse_z + loss_func(pred_y, test_Y)/10000
+                    loss = mse_z + loss_func(pred_y, test_Y)
 
                     mse = torch.mean((test_Y - pred_y)**2, dim=0).detach().cpu() * (std_Y**2)
 
                     pred_y_rand, mse_z_rand = model(test_rand_coeffs, ztest)
                     # loss_rand = loss_func(pred_y_rand, test_Y)
-                    loss_rand = mse_z_rand + loss_func(pred_y, test_Y)/10000
+                    loss_rand = mse_z_rand + loss_func(pred_y, test_Y)
 
                     mse_rand = torch.mean((test_Y - pred_y_rand)**2, dim=0).detach().cpu() * (std_Y**2)
 
