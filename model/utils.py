@@ -240,7 +240,7 @@ class CNNResBlock(nn.Module):
 
         self.layernorm = layernorm
         if layernorm:
-            self.layernorm = nn.BatchNorm1d(dim)
+            self.layernorm = nn.LayerNorm(dim)
 
     def forward(self, x):
         residual = x

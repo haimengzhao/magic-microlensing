@@ -19,10 +19,7 @@ class Scaler(nn.Module):
         self.device = device
 
         self.initial = nn.Sequential(
-            # nn.LayerNorm(input_dim),
             utils.create_net(input_dim, latent_dim, n_layers=0, n_units=1024, nonlinear=nn.PReLU),
-            # *[utils.ResBlock(1024, 1024, nonlinear=nn.PReLU) for i in range(3)],
-            # utils.create_net(1024, latent_dim, n_layers=0, n_units=1024, nonlinear=nn.PReLU),
         )
         
         self.gate = nn.PReLU()
@@ -44,31 +41,8 @@ class Scaler(nn.Module):
        
     def forward(self, coeffs):
         X = torchcde.CubicSpline(coeffs)
-
-        # X0 = X.evaluate(X.interval[0])
-        # z0 = self.initial(X0)
-
-        # X1 = X.evaluate(X.interval[-1])
-        # z1 = self.initial(X1)
-
         interval = torch.linspace(X.interval[0], X.interval[-1], self.n_cnn_intervals).to(self.device)
 
-        # z_T = torchcde.cdeint(X=X,
-        #                       z0=z0,
-        #                       func=self.cde_func,
-        #                       t=interval,
-        #                       adjoint=False,
-        #                       method="dopri5", rtol=1e-5, atol=1e-7)
-
-        # z_T1 = torchcde.cdeint(X=X,
-        #                       z0=z1,
-        #                       func=self.cde_func_r,
-        #                       t=torch.flip(interval, dims=[0]),
-        #                       adjoint=False,
-        #                       method="dopri5", rtol=1e-5, atol=1e-7)
-
-        # z = self.gate(z_T + torch.flip(z_T1, dims=[0])) + self.initial(X.evaluate(interval))
-        # print(X.evaluate(interval).shape)
         z = self.initial(X.evaluate(interval))
         z = z.transpose(-1, -2) # (batch, time, channel) -> (batch, channel, time)
 

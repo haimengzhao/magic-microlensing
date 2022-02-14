@@ -25,39 +25,10 @@ class Locator(nn.Module):
        
     def forward(self, coeffs, zt):
         X = torchcde.CubicSpline(coeffs)
-
-        # X0 = X.evaluate(X.interval[0])
-        # z0 = self.initial(X0)
-
-        # X1 = X.evaluate(X.interval[-1])
-        # z1 = self.initial(X1)
-
         interval = torch.linspace(X.interval[0], X.interval[-1], self.n_intervals).to(self.device)
 
-        # z_T = torchcde.cdeint(X=X,
-        #                       z0=z0,
-        #                       func=self.cde_func,
-        #                       t=interval,
-        #                       adjoint=False,
-        #                       method="dopri5", rtol=1e-3, atol=1e-5)
-
-        # z_T1 = torchcde.cdeint(X=X,
-        #                       z0=z1,
-        #                       func=self.cde_func_r,
-        #                       t=torch.flip(interval, dims=[0]),
-        #                       adjoint=False,
-        #                       method="dopri5", rtol=1e-3, atol=1e-5)
-
-        # z = self.gate(z_T + torch.flip(z_T1, dims=[-2]))
-
-        # z = self.readout(z).squeeze(-1)
-
         z = X.evaluate(interval)[:, :, [1]]
-        # plt.plot(interval.cpu(), z[0, :, 0].cpu())
-        # plt.plot(interval.cpu(), z[0, :, 1].cpu())
-        # plt.show()
         z = z.transpose(-1, -2) # (batch, time, channel) -> (batch, channel, time)
-
         z = self.unet(z)
         z = z.squeeze(-2)
 
@@ -77,5 +48,4 @@ class Locator(nn.Module):
         # plt.plot(timelist[0].cpu(), diffz[0].cpu().detach().numpy()+14)
         # plt.show()
 
-        # return torch.hstack([plus / 2, -minus / 4]), mse_z
         return reg, mse_z

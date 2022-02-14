@@ -25,7 +25,7 @@ parser.add_argument('--lr',  type=float, default=4e-6, help="Starting learning r
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0.h5', help="Path for dataset")
-parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/locator/', help="Path for save checkpoints")
+parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/scaler/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
 parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
@@ -34,7 +34,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:8" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -126,7 +126,6 @@ if __name__ == '__main__':
 
     output_dim = Y.shape[-1]
     input_dim = train_logsig.shape[-1]
-    # input_dim = 1
     latent_dim = args.latents
 
     del Y
@@ -163,9 +162,10 @@ if __name__ == '__main__':
 
     optimizer = optim.Adam(
         [
-            {"params": model.initial.parameters(), "lr": args.lr*1e0},
-            {"params": model.cnn_featurizer.parameters(), "lr": args.lr*1e0},
-            {"params": model.regressor.parameters(), "lr": args.lr*1e0}
+            {"params": model.parameters(), "lr": args.lr*1e0},
+            # {"params": model.initial.parameters(), "lr": args.lr*1e0},
+            # {"params": model.cnn_featurizer.parameters(), "lr": args.lr*1e0},
+            # {"params": model.regressor.parameters(), "lr": args.lr*1e0}
         ],
         lr=args.lr, weight_decay=0,
         )
@@ -188,8 +188,8 @@ if __name__ == '__main__':
         # else:
         #     e_dataloader = train_rand_dataloader
         #     print('Using irregular data')
-        # e_dataloader = train_mix_dataloader
-        e_dataloader = train_dataloader
+        e_dataloader = train_mix_dataloader
+        # e_dataloader = train_dataloader
         num_batches = len(e_dataloader)
             
         for i, (batch_coeffs, batch_y) in enumerate(e_dataloader):
