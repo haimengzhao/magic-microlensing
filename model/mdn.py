@@ -59,7 +59,7 @@ class MDN(nn.Module):
         return pi, sigma, mu
 
 
-def gaussian_probability(sigma, mu, target):
+def log_gaussian_probability(sigma, mu, target):
     """Returns the probability of `target` given MoG parameters `sigma` and `mu`.
 
     Arguments:
@@ -76,8 +76,8 @@ def gaussian_probability(sigma, mu, target):
             of the distribution in the corresponding sigma/mu index.
     """
     target = target.unsqueeze(1).expand_as(sigma)
-    ret = ONEOVERSQRT2PI * torch.exp(-0.5 * ((target - mu) / sigma)**2) / sigma
-    return torch.prod(ret, 2)
+    ret = -0.5 * ((target - mu) / sigma)**2 + torch.log(ONEOVERSQRT2PI / sigma)
+    return torch.sum(ret, 2)
 
 
 def mdn_loss(pi, sigma, mu, target):
@@ -86,8 +86,8 @@ def mdn_loss(pi, sigma, mu, target):
     The loss is the negative log likelihood of the data given the MoG
     parameters.
     """
-    prob = pi * gaussian_probability(sigma, mu, target)
-    nll = -torch.log(torch.sum(prob, dim=1))
+    log_prob = torch.log(pi) + log_gaussian_probability(sigma, mu, target)
+    nll = -torch.logsumexp(log_prob, dim=1)
     return torch.mean(nll)
 
 
@@ -100,7 +100,7 @@ def sample(pi, sigma, mu):
     # Do a (output dims)X(batch size) tensor here, so the broadcast works in
     # the next step, but we have to transpose back.
     gaussian_noise = torch.randn(
-        (sigma.size(2), sigma.size(0)), requires_grad=False)
+        (sigma.size(2), sigma.size(0)), requires_grad=False).to(sigma.device)
     variance_samples = sigma.gather(1, pis).detach().squeeze()
     mean_samples = mu.detach().gather(1, pis).squeeze()
     return (gaussian_noise * variance_samples + mean_samples).transpose(0, 1)

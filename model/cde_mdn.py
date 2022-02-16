@@ -4,7 +4,7 @@ import torch.nn as nn
 import model.utils as utils
 
 import torchcde
-import mdn
+import model.mdn as mdn
 
 class CDEFunc(nn.Module):
     '''
@@ -47,33 +47,66 @@ class CDE_MDN(nn.Module):
         self.output_dim = output_dim
         self.n_gaussian = 12
 
-        self.cde_func = CDEFunc(input_dim, latent_dim)
+        # self.cde_func = CDEFunc(input_dim, latent_dim)
+        # utils.init_network_weights(self.cde_func, nn.init.orthogonal_)
+        # self.initial = nn.Sequential(
+        #     utils.create_net(input_dim, latent_dim, n_layers=1, n_units=1024, nonlinear=nn.PReLU),
+        # )
+        # self.readout = nn.Sequential(
+        #     utils.create_net(latent_dim, 1024, n_layers=0, n_units=1024, nonlinear=nn.PReLU),
+        #     *[utils.ResBlock(1024, 1024, nonlinear=nn.PReLU) for i in range(3)],
+        #     mdn.MDN(in_features=1024, out_features=self.output_dim, num_gaussians=self.n_gaussian)
+        # )
+        self.n_cnn_intervals = 2048
+
         self.initial = nn.Sequential(
-            utils.create_net(input_dim, latent_dim, n_layers=1, n_units=1024, nonlinear=nn.PReLU),
+            utils.create_net(input_dim, latent_dim, n_layers=0, n_units=1024, nonlinear=nn.PReLU),
         )
-        self.readout = nn.Sequential(
-            utils.create_net(latent_dim, 1024, n_layers=0, n_units=1024, nonlinear=nn.PReLU),
-            *[utils.ResBlock(1024, 1024, nonlinear=nn.PReLU) for i in range(3)],
-            mdn.MDN(in_features=1024, out_features=self.output_dim, num_gaussians=self.n_gaussian)
+        
+        self.gate = nn.PReLU()
+
+        self.cnn_featurizer = nn.Sequential(
+            nn.Conv1d(latent_dim, 256, kernel_size=15, stride=2, padding=7), nn.PReLU(),
+            nn.Conv1d(256, 512, kernel_size=15, stride=2, padding=7), nn.PReLU(),
+            *[utils.CNNResBlock(512, 128, nonlinear=nn.PReLU, layernorm=False) for i in range(15)],
+            nn.Conv1d(512, 128, kernel_size=15, stride=2, padding=7), nn.PReLU(),
+            nn.Conv1d(128, 64, kernel_size=15, stride=2, padding=7), nn.PReLU(),
+            nn.Conv1d(64, 32, kernel_size=1, stride=1, padding=0), nn.PReLU(),
+        )
+        utils.init_network_weights(self.cnn_featurizer, nn.init.kaiming_normal_)
+
+        self.regressor = nn.Sequential(
+            mdn.MDN(in_features=128*32, out_features=self.output_dim, num_gaussians=self.n_gaussian)
         )
         
     def forward(self, coeffs):
+        # X = torchcde.CubicSpline(coeffs)
+
+        # X0 = X.evaluate(X.interval[0])
+        # z0 = self.initial(X0)
+
+        # z_T = torchcde.cdeint(X=X,
+        #                       z0=z0,
+        #                       func=self.cde_func,
+        #                       t=X.interval,
+        #                       adjoint=False,
+        #                       method="dopri5", rtol=1e-5, atol=1e-7)
+
+        # z_T = z_T[:, -1]
+        # pi, sigma, mu = self.readout(z0)
         X = torchcde.CubicSpline(coeffs)
+        interval = torch.linspace(X.interval[0], X.interval[-1], self.n_cnn_intervals).to(coeffs.device)
 
-        X0 = X.evaluate(X.interval[0])
-        z0 = self.initial(X0)
+        z = self.initial(X.evaluate(interval))
+        z = z.transpose(-1, -2) # (batch, time, channel) -> (batch, channel, time)
 
-        z_T = torchcde.cdeint(X=X,
-                              z0=z0,
-                              func=self.cde_func,
-                              t=X.interval,
-                              adjoint=False,
-                              method="dopri5", rtol=1e-5, atol=1e-7)
+        z = self.cnn_featurizer(z).flatten(start_dim=1)
 
-        z_T = z_T[:, -1]
-        pi, sigma, mu = self.readout(z_T).reshape(-1, self.output_dim, 3, self.n_gaussian)
-
+        pi, sigma, mu = self.regressor(z)
         return pi, sigma, mu
     
-    def mdn_loss(pi, sigma, mu, labels):
+    def mdn_loss(self, pi, sigma, mu, labels):
         return mdn.mdn_loss(pi, sigma, mu, labels)
+
+    def sample(self, pi, sigma, mu):
+        return mdn.sample(pi, sigma, mu)
