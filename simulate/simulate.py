@@ -3,6 +3,8 @@ from https://github.com/rpoleski/MulensModel/blob/master/examples/example_18_sim
 and https://github.com/LRayleighJ/MDN_lc_iden/blob/main/simudata/gen_simu.py
 
 Script for simulating microlensing lightcurves.
+
+NB: output mag = 22 - 2.5lg(flux)
 """
 import os
 import numpy as np
@@ -107,6 +109,8 @@ def simulate_lc(
             # print("chi^2 single: {:.2f}".format(chi2))
 
             if chi2 > 72./0.01:
+                # plt.plot(data.mag+np.log10(flux)*2.5)
+                # plt.show()
                 return np.stack([times, data.mag, data.err_mag], axis=-1).reshape(1, -1, 3)
             else: 
                 return None
@@ -211,6 +215,7 @@ def simulate_batch(batch_size, relative_uncertainty, time_settings_random, time_
 
         lc_random = simulate_lc(**settings_random, 
             flux_source=1000, flux_blending=1000*(1-f_s)/f_s, relative_uncertainty=relative_uncertainty, plot=False)
+
         if type(lc_random) == np.ndarray:
             lc_even = simulate_lc(**settings_even, 
                 flux_source=1000, flux_blending=1000*(1-f_s)/f_s, relative_uncertainty=0, plot=False)

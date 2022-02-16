@@ -1,10 +1,9 @@
-import os
-import sys
 import numpy as np
 import h5py
 import torch
 import torchcde
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 from model.locator import Locator
 from model.scaler import Scaler
@@ -91,9 +90,11 @@ if __name__ == '__main__':
 
     # transform
     X_even[:, :, 0] = (X_even[:, :, 0] - pred[:, [0]]) / pred[:, [1]]
-    X_even[:, :, 1] = X_even[:, :, 1] * (10. ** pred_s)
+    X_even[:, :, 1] = 10. ** ((22 - X_even[:, :, 1]) / 2.5)
+    X_even[:, :, 1] = X_even[:, :, 1] / 1000 - (1 - (10. ** pred_s)) / (10. ** pred_s)
     X_rand[:, :, 0] = (X_rand[:, :, 0] - pred_rand[:, [0]]) / pred_rand[:, [1]]
-    X_rand[:, :, 1] = X_rand[:, :, 1] * (10. ** pred_rand_s)
+    X_rand[:, :, 1] = 10. ** ((22 - X_rand[:, :, 1]) / 2.5)
+    X_rand[:, :, 1] = X_rand[:, :, 1] / 1000 - (1 - (10. ** pred_rand_s)) / (10. ** pred_rand_s)
 
     for i in tqdm(range(len(Y))):
         lc = X_even[i]
@@ -108,6 +109,8 @@ if __name__ == '__main__':
             X_rand[i] = lc
         except:
             print(X_rand[i, :, 0])
+            plt.plot(X_rand[i, :, 0], X_rand[i, :, 1])
+            plt.show()
             X_rand[i] = np.nan
 
     # save
