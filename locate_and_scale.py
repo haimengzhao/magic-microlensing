@@ -96,15 +96,19 @@ if __name__ == '__main__':
     X_rand[:, :, 1] = 10. ** ((22 - X_rand[:, :, 1]) / 2.5)
     X_rand[:, :, 1] = X_rand[:, :, 1] / 1000 - (1 - (10. ** pred_rand_s)) / (10. ** pred_rand_s)
 
+    max_len_even = 0
+    max_len_rand = 0
     for i in tqdm(range(len(Y))):
         lc = X_even[i]
         lc = lc[torch.where((lc[:, 0] <= 2) * (lc[:, 0] >= -2))]
+        max_len_even = max(max_len_even, len(lc))
         lc = torch.cat([lc, lc[-1].expand(X_even.shape[1] - len(lc), lc.shape[-1])])
         X_even[i] = lc
 
         try:
             lc = X_rand[i]
             lc = lc[torch.where((lc[:, 0] <= 2) * (lc[:, 0] >= -2))]
+            max_len_rand = max(max_len_rand, len(lc))
             lc = torch.cat([lc, lc[-1].expand(X_rand.shape[1] - len(lc), lc.shape[-1])])
             X_rand[i] = lc
         except:
@@ -112,6 +116,9 @@ if __name__ == '__main__':
             plt.plot(X_rand[i, :, 0], X_rand[i, :, 1])
             plt.show()
             X_rand[i] = np.nan
+
+    X_even = X_even[:, :max_len_even]
+    X_rand = X_rand[:, :max_len_rand]
 
     # save
     with h5py.File(dataset[:-3]+'-located.h5', mode='w') as dataset_file:
