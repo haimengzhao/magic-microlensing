@@ -34,7 +34,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -130,11 +130,11 @@ if __name__ == '__main__':
     # test_logsig_rand = X_rand[(-test_size):, :, :].float().to(device)
     test_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(test_logsig_rand).float().to(device)
 
-    rescaley = (test_Y / 72 * 4000).int()
-    left = rescaley[:, [0]] - 2*rescaley[:, [1]]
-    right = rescaley[:, [0]] + 2*rescaley[:, [1]]
-    ztest = torch.tile(torch.arange(0, 4000).unsqueeze(0), (len(test_Y), 1)).to(device)
-    ztest = ((ztest > left)*(ztest<right)).int()
+    # rescaley = (test_Y / 72 * 4000).int()
+    # left = rescaley[:, [0]] - 2*rescaley[:, [1]]
+    # right = rescaley[:, [0]] + 2*rescaley[:, [1]]
+    # ztest = torch.tile(torch.arange(0, 4000).unsqueeze(0), (len(test_Y), 1)).to(device)
+    # ztest = ((ztest > left)*(ztest<right)).int()
 
     output_dim = Y.shape[-1]
     input_dim = train_logsig.shape[-1]
@@ -206,24 +206,24 @@ if __name__ == '__main__':
         num_batches = len(e_dataloader)
             
         for i, (batch_coeffs, batch_y) in enumerate(e_dataloader):
-
+            model.train()
             batch_y = batch_y.float().to(device)
             batch_coeffs = batch_coeffs.float().to(device)
 
-            rescaley = (batch_y / 72 * 4000).int()
-            left = rescaley[:, [0]] - 2*rescaley[:, [1]]
-            right = rescaley[:, [0]] + 2*rescaley[:, [1]]
-            z = torch.tile(torch.arange(0, 4000).unsqueeze(0), (len(batch_y), 1)).to(device)
-            z = ((z > left) * (z < right)).int()
+            # rescaley = (batch_y / 72 * 4000).int()
+            # left = rescaley[:, [0]] - 2*rescaley[:, [1]]
+            # right = rescaley[:, [0]] + 2*rescaley[:, [1]]
+            # z = torch.tile(torch.arange(0, 4000).unsqueeze(0), (len(batch_y), 1)).to(device)
+            # z = ((z > left) * (z < right)).int()
 
             optimizer.zero_grad()
 
-            pred_y, mse_z = model(batch_coeffs, z)
+            pred_y, mse_z = model(batch_coeffs, batch_y)
 
             mse = torch.mean((batch_y - pred_y)**2, dim=0).detach().cpu() * (std_Y**2)
             
             # loss = loss_func(pred_y, batch_y)
-            loss = mse_z + loss_func(pred_y, batch_y)
+            loss = mse_z + loss_func(pred_y*torch.tensor([1, 10]).to(device), batch_y*torch.tensor([1, 10]).to(device))/10
             loss.backward()
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=20)
@@ -252,15 +252,15 @@ if __name__ == '__main__':
                 print(f'Model saved to {ckpt_path}')
 
                 with torch.no_grad():
-                    pred_y, mse_z = model(test_coeffs, ztest)
+                    pred_y, mse_z = model(test_coeffs, test_Y)
                     # loss = loss_func(pred_y, test_Y)
-                    loss = mse_z + loss_func(pred_y, test_Y)
+                    loss = mse_z + loss_func(pred_y*torch.tensor([1, 10]).to(device), test_Y*torch.tensor([1, 10]).to(device))/10
 
                     mse = torch.mean((test_Y - pred_y)**2, dim=0).detach().cpu() * (std_Y**2)
 
-                    pred_y_rand, mse_z_rand = model(test_rand_coeffs, ztest)
+                    pred_y_rand, mse_z_rand = model(test_rand_coeffs, test_Y)
                     # loss_rand = loss_func(pred_y_rand, test_Y)
-                    loss_rand = mse_z_rand + loss_func(pred_y, test_Y)
+                    loss_rand = mse_z_rand + loss_func(pred_y*torch.tensor([1, 10]).to(device), test_Y*torch.tensor([1, 10]).to(device))/10
 
                     mse_rand = torch.mean((test_Y - pred_y_rand)**2, dim=0).detach().cpu() * (std_Y**2)
 
