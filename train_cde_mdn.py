@@ -20,10 +20,10 @@ from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser('CDE-MDN')
 parser.add_argument('--niters', type=int, default=1000)
-parser.add_argument('--lr',  type=float, default=4e-4, help="Starting learning rate")
+parser.add_argument('--lr',  type=float, default=1e-9, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
-parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-located.h5', help="Path for dataset")
+parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-located-logsig.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/cde_mdn/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
@@ -33,7 +33,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -69,15 +69,22 @@ if __name__ == '__main__':
         X_even = torch.tensor(dataset_file['X_even'][...])
         X_rand = torch.tensor(dataset_file['X_random'][...])
 
-    test_size = 1024
-    # train_size = len(Y) - test_size
-    train_size = 128
-
     # filter nan
     nanind = torch.where(~torch.isnan(X_even[:, 0, 1]))[0]
     Y = Y[nanind]
     X_even = X_even[nanind]
     X_rand = X_rand[nanind]
+
+    nanind = torch.where(Y[:, 4]>1e-4)[0]
+    Y = Y[nanind]
+    X_even = X_even[nanind]
+    X_rand = X_rand[nanind]
+
+    test_size = 1024
+    train_size = len(Y) - test_size
+    # train_size = 128
+    print(f'Training Set Size: {train_size}')
+
 
     # # normalize
     # Y: t_0, t_E, u_0, rho, q, s, alpha, f_s
@@ -92,13 +99,15 @@ if __name__ == '__main__':
     # Y = (Y - mean_y) / std_y
     # print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
         
-    # CDE interpolation with log_sig
-    depth = 3; window_length = 1; window_length_rand = 1
-    train_logsig = torchcde.logsig_windows(X_even[:train_size, :, :], depth, window_length=window_length)
-    train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig)
+# CDE interpolation with log_sig
+    # depth = 3; window_length = 1; window_length_rand = 1
+    # train_logsig = torchcde.logsig_windows(X_even[:train_size, :, :], depth, window_length=window_length)
+    # train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig)
+    train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_even[:train_size, :, :])
 
-    train_logsig_rand = torchcde.logsig_windows(X_rand[:train_size, :, :], depth, window_length=window_length_rand)
-    train_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig_rand)
+    # train_logsig_rand = torchcde.logsig_windows(X_rand[:train_size, :, :], depth, window_length=window_length_rand)
+    # train_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig_rand)
+    train_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_rand[:train_size, :, :])
 
     train_dataset = torch.utils.data.TensorDataset(train_coeffs, Y[:train_size])
     train_rand_dataset = torch.utils.data.TensorDataset(train_rand_coeffs, Y[:train_size])
@@ -106,20 +115,22 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
     train_rand_dataloader = DataLoader(train_rand_dataset, batch_size=args.batch_size, shuffle=False)
 
-    train_mix_dataset = torch.utils.data.TensorDataset(torch.cat([train_coeffs, train_rand_coeffs], dim=0), Y[:train_size].repeat(2, 1))
+    train_mix_dataset = torch.utils.data.TensorDataset(torch.cat([train_coeffs, train_rand_coeffs[:, :train_coeffs.shape[1]]], dim=0), Y[:train_size].repeat(2, 1))
     train_mix_dataloader = DataLoader(train_mix_dataset, batch_size=args.batch_size, shuffle=True)
 
-    test_logsig = torchcde.logsig_windows(X_even[(-test_size):, :, :].float().to(device), depth, window_length=window_length)
-    test_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(test_logsig)
+    # test_logsig = torchcde.logsig_windows(X_even[(-test_size):, :, :].float().to(device), depth, window_length=window_length)
+    # test_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(test_logsig)
+    test_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_even[(-test_size):, :, :].float().to(device))
     test_Y = Y[(-test_size):].float().to(device)
     
-    test_logsig_rand = torchcde.logsig_windows(X_rand[(-test_size):, :, :].float().to(device), depth, window_length=window_length_rand)
-    test_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(test_logsig_rand).float().to(device)
+    # test_logsig_rand = torchcde.logsig_windows(X_rand[(-test_size):, :, :].float().to(device), depth, window_length=window_length_rand)
+    # test_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(test_logsig_rand).float().to(device)
+    test_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_rand[(-test_size):, :, :]).float().to(device)
 
     output_dim = Y.shape[-1]
-    input_dim = train_logsig.shape[-1]
+    # input_dim = train_logsig.shape[-1]
+    input_dim = X_even.shape[-1]
     latent_dim = args.latents
-
     del Y
     del X_even
     del X_rand
@@ -189,15 +200,13 @@ if __name__ == '__main__':
 
             optimizer.zero_grad()
 
-            pi, sigma, mu = model(batch_coeffs)
-            # print(sigma[0])
-            # print(mu[0])
-            pred_y = model.sample(pi, sigma, mu)
+            pi, normal = model(batch_coeffs)
+            pred_y = model.sample(pi, normal)
 
             mse_log10q = torch.mean((batch_y[:, 0] - pred_y[:, 0])**2).detach().cpu()
             mse_log10s = torch.mean((batch_y[:, 1] - pred_y[:, 1])**2).detach().cpu()
             
-            loss = model.mdn_loss(pi, sigma, mu, batch_y)
+            loss = model.mdn_loss(pi, normal, batch_y)
             loss.backward()
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=20)
@@ -231,16 +240,16 @@ if __name__ == '__main__':
                 print(f'Model saved to {ckpt_path}')
 
                 with torch.no_grad():
-                    pi, sigma, mu = model(test_coeffs)
-                    loss = model.mdn_loss(pi, sigma, mu, test_Y)
-                    pred_y = model.sample(pi, sigma, mu)
+                    pi, normal = model(test_coeffs)
+                    loss = model.mdn_loss(pi, normal, test_Y)
+                    pred_y = model.sample(pi, normal)
 
                     mse_log10q = torch.mean((test_Y[:, 0] - pred_y[:, 0])**2).detach().cpu()
                     mse_log10s = torch.mean((test_Y[:, 1] - pred_y[:, 1])**2).detach().cpu()
 
-                    pi, sigma, mu = model(test_rand_coeffs)
-                    loss_rand = model.mdn_loss(pi, sigma, mu, test_Y)
-                    pred_y_rand = model.sample(pi, sigma, mu)
+                    pi, normal = model(test_rand_coeffs)
+                    loss_rand = model.mdn_loss(pi, normal, test_Y)
+                    pred_y_rand = model.sample(pi, normal)
 
                     mse_log10q_rand = torch.mean((test_Y[:, 0] - pred_y_rand[:, 0])**2).detach().cpu()
                     mse_log10s_rand = torch.mean((test_Y[:, 1] - pred_y_rand[:, 1])**2).detach().cpu()

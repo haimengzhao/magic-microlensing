@@ -108,7 +108,7 @@ def simulate_lc(
             chi2 = event_single.get_chi2()
             # print("chi^2 single: {:.2f}".format(chi2))
 
-            if chi2 > 72./0.01:
+            if chi2 > 72./0.01 * 8:
                 # plt.plot(data.mag+np.log10(flux)*2.5)
                 # plt.show()
                 return np.stack([times, data.mag, data.err_mag], axis=-1).reshape(1, -1, 3)
@@ -242,13 +242,13 @@ def simulate_batch(batch_size, relative_uncertainty, time_settings_random, time_
 
     pbar.close()
 
-    with h5py.File(f'/work/hmzhao/irregular-lc/roman-{b}.h5', 'w') as opt:
+    with h5py.File(f'/work/hmzhao/irregular-lc/roman-{b}-8dof.h5', 'w') as opt:
         opt['X_random'] = X_random
         opt['X_even'] = X_even
         opt['Y'] = Y
     
     time_end = time.time()
-    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/roman-{b}.h5, size {batch_size}, use time: {time_end - time_start}s\n')
+    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/roman-{b}-8dof.h5, size {batch_size}, use time: {time_end - time_start}s\n')
     log.close()
 
         

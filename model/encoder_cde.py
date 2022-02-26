@@ -1,3 +1,4 @@
+from matplotlib import pyplot as plt
 import torch
 import torch.nn as nn
 from torch.nn.modules.activation import Tanh
@@ -18,9 +19,9 @@ class CDEFunc(nn.Module):
         self.latent_dim = latent_dim
 
         self.linear1 = nn.Linear(latent_dim, 1024)
-        self.relu1 = nn.ReLU()
+        self.ReLU1 = nn.ReLU()
         self.resblocks = nn.Sequential(*[utils.ResBlock(1024, 1024, nonlinear=nn.ReLU, layernorm=False) for i in range(3)])
-        self.relu2 = nn.ReLU()
+        self.ReLU2 = nn.ReLU()
         self.linear2 = nn.Linear(1024, input_dim * latent_dim)
         self.tanh = nn.Tanh()
         self.linear3 = nn.Linear(input_dim * latent_dim, input_dim * latent_dim)
@@ -28,9 +29,9 @@ class CDEFunc(nn.Module):
     def forward(self, t, z):
         # z = torch.cat([t.repeat(z.shape[0], 1), z], dim=-1)
         z = self.linear1(z)
-        z = self.relu1(z)
+        z = self.ReLU1(z)
         z = self.resblocks(z)
-        z = self.relu2(z)
+        z = self.ReLU2(z)
         z = self.linear2(z)
         z = self.tanh(z) # important!
         z = self.linear3(z)
@@ -53,26 +54,34 @@ class CDEEncoder(nn.Module):
         self.latent_dim = latent_dim
 
         self.cde_func = CDEFunc(input_dim, latent_dim)
-        utils.init_network_weights(self.cde_func, method=nn.init.orthogonal_)
+        # utils.init_network_weights(self.cde_func, method=nn.init.kaiming_normal_)
         self.initial = nn.Sequential(
             utils.create_net(input_dim, 1024, n_layers=0, n_units=1024, nonlinear=nn.ReLU),
-            *[utils.ResBlock(1024, 1024, nonlinear=nn.ReLU) for i in range(3)],
+            *[utils.ResBlock(1024, 1024, nonlinear=nn.ReLU, layernorm=False) for i in range(3)],
             utils.create_net(1024, latent_dim, n_layers=0, n_units=1024, nonlinear=nn.ReLU),
         )
-        # self.initial = utils.create_net(input_dim, latent_dim, n_layers=5, n_units=1024, nonlinear=nn.PReLU)
+        # self.initial = utils.create_net(input_dim, latent_dim, n_layers=1, n_units=1024, nonlinear=nn.ReLU)
         # self.initial = nn.Sequential(
-        #     utils.create_net(input_dim, latent_dim, n_layers=5, n_units=1024, nonlinear=nn.PReLU),
+        #     utils.create_net(input_dim, latent_dim, n_layers=5, n_units=1024, nonlinear=nn.ReLU),
         #     )
+        # utils.init_network_weights(self.initial, nn.init.kaiming_uniform_)
         self.readout = nn.Sequential(
             utils.create_net(latent_dim, 1024, n_layers=0, n_units=1024, nonlinear=nn.ReLU),
-            *[utils.ResBlock(1024, 1024, nonlinear=nn.ReLU) for i in range(3)],
+            *[utils.ResBlock(1024, 1024, nonlinear=nn.ReLU, layernorm=False) for i in range(3)],
             nn.Linear(1024, output_dim)
         )
+        # self.readout = nn.Sequential(
+        #     utils.create_net(input_dim * 100, output_dim, n_layers=3, n_units=1024, nonlinear=nn.ReLU),
+        # )
+        # utils.init_network_weights(self.readout, nn.init.kaiming_normal_)
         # self.readout = utils.create_net(latent_dim, output_dim, n_layers=5, n_units=1024, nonlinear=nn.ReLU)
         # self.readout = utils.create_net(latent_dim, output_dim, n_layers=5, n_units=1024, nonlinear=nn.SiLU)
         
     def forward(self, coeffs):
         X = torchcde.CubicSpline(coeffs)
+
+        # plt.plot(X.evaluate(torch.linspace(X.interval[0], X.interval[-1], 125).to(coeffs.device)).detach().cpu()[0])
+        # plt.show()
 
         X0 = X.evaluate(X.interval[0])
         z0 = self.initial(X0)
@@ -85,5 +94,6 @@ class CDEEncoder(nn.Module):
                               method="dopri5", rtol=1e-5, atol=1e-7)
 
         z_T = z_T[:, -1]
+        # z_T = X.evaluate(torch.linspace(X.interval[0], X.interval[-1], 100).to(coeffs.device)).flatten(start_dim=1)
         pred = self.readout(z_T)
         return pred
