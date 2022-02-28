@@ -11,7 +11,7 @@ from model.scaler import Scaler
 
 use_ground_truth = True
 
-dataset = '/work/hmzhao/irregular-lc/roman-0-8dof-small.h5'
+dataset = '/work/hmzhao/irregular-lc/roman-0-8dof.h5'
 device_1 = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
 device_2 = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
 

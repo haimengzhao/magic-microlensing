@@ -24,7 +24,7 @@ parser.add_argument('--niters', type=int, default=1000)
 parser.add_argument('--lr',  type=float, default=4e-6, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
-parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0.h5', help="Path for dataset")
+parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-8dof.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/scaler/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")

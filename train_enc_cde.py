@@ -24,7 +24,7 @@ parser.add_argument('--lr',  type=float, default=4e-6, help="Starting learning r
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
-parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-8dof-small-located-logsig-gt.h5', help="Path for dataset")
+parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-8dof-located-logsig-gt.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     # X_even = X_even[nanind]
     # X_rand = X_rand[nanind]
 
-    test_size = 128
+    test_size = 1024
     train_size = len(Y) - test_size
     # train_size = 128
 
