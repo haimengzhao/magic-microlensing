@@ -20,10 +20,10 @@ from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser('CDE-MDN')
 parser.add_argument('--niters', type=int, default=1000)
-parser.add_argument('--lr',  type=float, default=1e-9, help="Starting learning rate")
+parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
-parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-located-logsig.h5', help="Path for dataset")
+parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-8dof-small-located-logsig-gt.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/cde_mdn/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
@@ -75,12 +75,12 @@ if __name__ == '__main__':
     X_even = X_even[nanind]
     X_rand = X_rand[nanind]
 
-    nanind = torch.where(Y[:, 4]>1e-4)[0]
-    Y = Y[nanind]
-    X_even = X_even[nanind]
-    X_rand = X_rand[nanind]
+    # nanind = torch.where(Y[:, 4]>1e-4)[0]
+    # Y = Y[nanind]
+    # X_even = X_even[nanind]
+    # X_rand = X_rand[nanind]
 
-    test_size = 1024
+    test_size = 128
     train_size = len(Y) - test_size
     # train_size = 128
     print(f'Training Set Size: {train_size}')
