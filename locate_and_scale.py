@@ -9,11 +9,11 @@ import matplotlib.pyplot as plt
 from model.locator import Locator
 from model.scaler import Scaler
 
-use_ground_truth = True
+use_ground_truth = False
 
 dataset = '/work/hmzhao/irregular-lc/roman-0-8dof.h5'
-device_1 = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
-device_2 = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
+device_1 = torch.device("cuda:9" if torch.cuda.is_available() else "cpu")
+device_2 = torch.device("cuda:9" if torch.cuda.is_available() else "cpu")
 
 if __name__ == '__main__':
     with h5py.File(dataset, mode='r') as dataset_file:

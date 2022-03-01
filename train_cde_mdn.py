@@ -33,7 +33,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -89,8 +89,9 @@ if __name__ == '__main__':
     # # normalize
     # Y: t_0, t_E, u_0, rho, q, s, alpha, f_s
     Y[:, 3:6] = torch.log10(Y[:, 3:6])
-    Y[:, 6] = Y[:, 6] / 360
-    Y = Y[:, 4:6]
+    Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
+    Y[:, 7] = torch.sin(Y[:, 6] / 180 * np.pi)
+    Y = Y[:, 2:]
     mean_y = torch.mean(Y, axis=0)
     std_y = torch.std(Y, axis=0)
     # std_mask = (std_y==0)
@@ -98,8 +99,23 @@ if __name__ == '__main__':
     print(f'Y mean: {mean_y}\nY std: {std_y}')
     # Y = (Y - mean_y) / std_y
     # print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
+
+    mean_x_even = 14.5
+    std_x_even = 0.2
+    # X_even[:, :, 1] = 10**((22-X_even[:, :, 1])/2.5)/1000
+    # X_even[:, :, 1] = 22 - 2.5*torch.log10(1000*X_even[:, :, 1])
+    X_even[:, :, 1] = (X_even[:, :, 1] - mean_x_even) / std_x_even
+    print(f'normalized X mean: {torch.mean(X_even[:, :, 1])}\nX std: {torch.mean(torch.std(X_even[:, :, 1], axis=0))}')
+    # X_rand = X_rand[:, :, :2]
+    # X_rand[:, :, 1] = 10**((22-X_rand[:, :, 1])/2.5)/1000
+    # X_rand[:, :, 1] = 22 - 2.5*torch.log10(1000*X_rand[:, :, 1])
+    X_rand[:, :, 1] = (X_rand[:, :, 1] - mean_x_even) / std_x_even
+
+    # time rescale
+    X_even[:, :, 0] = X_even[:, :, 0] / 4
+    X_rand[:, :, 0] = X_rand[:, :, 0] / 4
         
-# CDE interpolation with log_sig
+    # CDE interpolation with log_sig
     # depth = 3; window_length = 1; window_length_rand = 1
     # train_logsig = torchcde.logsig_windows(X_even[:train_size, :, :], depth, window_length=window_length)
     # train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig)
