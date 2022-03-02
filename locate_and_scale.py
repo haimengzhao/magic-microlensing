@@ -12,8 +12,8 @@ from model.scaler import Scaler
 use_ground_truth = False
 
 dataset = '/work/hmzhao/irregular-lc/roman-0-8dof.h5'
-device_1 = torch.device("cuda:9" if torch.cuda.is_available() else "cpu")
-device_2 = torch.device("cuda:9" if torch.cuda.is_available() else "cpu")
+device_1 = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+device_2 = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 
 if __name__ == '__main__':
     with h5py.File(dataset, mode='r') as dataset_file:
@@ -41,7 +41,7 @@ if __name__ == '__main__':
 
         # load locator
         print('loading locator')
-        checkpt = torch.load('/work/hmzhao/experiments/locator/best_rand_locator.ckpt', map_location='cpu')
+        checkpt = torch.load('/work/hmzhao/experiments/locator/experiment_24294.ckpt', map_location='cpu')
         ckpt_args = checkpt['args']
         state_dict = checkpt['state_dict']
 
@@ -61,7 +61,7 @@ if __name__ == '__main__':
 
         # load scaler
         print('loading scaler')
-        checkpt = torch.load('/work/hmzhao/experiments/scaler/best_rand_scaler.ckpt', map_location='cpu')
+        checkpt = torch.load('/work/hmzhao/experiments/scaler/best_rand_scaler_8dof.ckpt', map_location='cpu')
         ckpt_args = checkpt['args']
         state_dict = checkpt['state_dict']
 
@@ -132,13 +132,18 @@ if __name__ == '__main__':
             print(X_rand[i, :, 0])
             plt.plot(X_rand[i, :, 0], X_rand[i, :, 1])
             plt.show()
-            lc_rand.append(torch.ones(X_rand.shape[1], lc.shape[-1])*np.nan)
+            lc_rand.append(torch.ones(X_rand.shape[1], (lc_rand[-1]).shape[-1])*np.nan)
 
     X_even = torch.stack(lc_even, dim=0)[:, :max_len_even]
     X_rand = torch.stack(lc_rand, dim=0)[:, :max_len_rand]
 
     # save
-    with h5py.File(dataset[:-3]+'-located-logsig-gt.h5', mode='w') as dataset_file:
+    if use_ground_truth:
+        filename = dataset[:-3]+'-located-logsig-gt.h5'
+    else:
+        filename = dataset[:-3]+'-located-logsig.h5'
+
+    with h5py.File(filename, mode='w') as dataset_file:
         dataset_file['Y'] = Y
         dataset_file['X_even'] = X_even
         dataset_file['X_random'] = X_rand

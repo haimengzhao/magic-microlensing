@@ -20,11 +20,11 @@ from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser('CDE Encoder')
 parser.add_argument('--niters', type=int, default=1000)
-parser.add_argument('--lr',  type=float, default=4e-6, help="Starting learning rate")
+parser.add_argument('--lr',  type=float, default=4e-5, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
-# parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
-parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-8dof-located-logsig-gt.h5', help="Path for dataset")
+parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
+# parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-8dof-located-logsig-gt.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
@@ -37,7 +37,7 @@ parser.add_argument('-u', '--units', type=int, default=1024, help="Number of uni
 
 args = parser.parse_args()
 
-device = torch.device("cuda:4" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -96,8 +96,10 @@ if __name__ == '__main__':
     print(f'Training Set Size: {train_size}')
 
     # # normalize
-    Y[:, 3:6] = torch.log(Y[:, 3:6])
-    Y[:, -1] = Y[:, -1] / 180 
+    Y[:, 3:6] = torch.log10(Y[:, 3:6])
+    Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
+    Y = torch.hstack([Y, torch.sin(Y[:, [6]] / 180 * np.pi)])
+    Y = Y[:, 2:]
     mean_y = torch.mean(Y, axis=0)
     std_y = torch.std(Y, axis=0)
     # std_mask = (std_y==0)
@@ -107,11 +109,11 @@ if __name__ == '__main__':
     # print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
 
     # only target at q (4) and s (5)
-    Y = Y[:, 4:6]
-    mean_y = mean_y[4:6]
-    std_y = std_y[4:6]
+    # Y = Y[:, 4:6]
+    # mean_y = mean_y[4:6]
+    # std_y = std_y[4:6]
     # print(f'Y mean: {mean_y}\nY std: {std_y}')
-    std_y = torch.tensor([1., 1.])
+    # std_y = torch.tensor([1., 1.])
     
     #
     # adaptive normalize is not compatible with irregular data, ABANDONED
@@ -126,24 +128,24 @@ if __name__ == '__main__':
     # X_even[:, :, 1] = 22 - 2.5*torch.log10(1000*X_even[:, :, 1])
     X_even[:, :, 1] = (X_even[:, :, 1] - mean_x_even) / std_x_even
     print(f'normalized X mean: {torch.mean(X_even[:, :, 1])}\nX std: {torch.mean(torch.std(X_even[:, :, 1], axis=0))}')
-    # X_rand = X_rand[:, :, :2]
+    X_rand = X_rand[:, :, :2]
     # X_rand[:, :, 1] = 10**((22-X_rand[:, :, 1])/2.5)/1000
     # X_rand[:, :, 1] = 22 - 2.5*torch.log10(1000*X_rand[:, :, 1])
     X_rand[:, :, 1] = (X_rand[:, :, 1] - mean_x_even) / std_x_even
 
     # time rescale
-    X_even[:, :, 0] = X_even[:, :, 0] / 4
-    X_rand[:, :, 0] = X_rand[:, :, 0] / 4
+    X_even[:, :, 0] = X_even[:, :, 0] / 200
+    X_rand[:, :, 0] = X_rand[:, :, 0] / 200
     
     # CDE interpolation with log_sig
-    # depth = 3; window_length = 10; window_length_rand = 2
-    # train_logsig = torchcde.logsig_windows(X_even[:train_size, :, :], depth, window_length=window_length)
-    # train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig)
-    train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_even[:train_size, :, :])
+    depth = 3; window_length = 10; window_length_rand = 2
+    train_logsig = torchcde.logsig_windows(X_even[:train_size, :, :], depth, window_length=window_length)
+    train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig)
+    # train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_even[:train_size, :, :])
 
-    # train_logsig_rand = torchcde.logsig_windows(X_rand[:train_size, :, :], depth, window_length=window_length_rand)
-    # train_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig_rand)
-    train_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_rand[:train_size, :, :])
+    train_logsig_rand = torchcde.logsig_windows(X_rand[:train_size, :, :], depth, window_length=window_length_rand)
+    train_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig_rand)
+    # train_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_rand[:train_size, :, :])
 
     train_dataset = torch.utils.data.TensorDataset(train_coeffs, Y[:train_size])
     train_rand_dataset = torch.utils.data.TensorDataset(train_rand_coeffs, Y[:train_size])
@@ -154,18 +156,18 @@ if __name__ == '__main__':
     train_mix_dataset = torch.utils.data.TensorDataset(torch.cat([train_coeffs, train_rand_coeffs[:, :train_coeffs.shape[1]]], dim=0), Y[:train_size].repeat(2, 1))
     train_mix_dataloader = DataLoader(train_mix_dataset, batch_size=args.batch_size, shuffle=True)
 
-    # test_logsig = torchcde.logsig_windows(X_even[(-test_size):, :, :].float().to(device), depth, window_length=window_length)
-    # test_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(test_logsig)
-    test_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_even[(-test_size):, :, :].float().to(device))
+    test_logsig = torchcde.logsig_windows(X_even[(-test_size):, :, :].float().to(device), depth, window_length=window_length)
+    test_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(test_logsig)
+    # test_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_even[(-test_size):, :, :].float().to(device))
     test_Y = Y[(-test_size):].float().to(device)
     
-    # test_logsig_rand = torchcde.logsig_windows(X_rand[(-test_size):, :, :].float().to(device), depth, window_length=window_length_rand)
-    # test_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(test_logsig_rand).float().to(device)
-    test_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_rand[(-test_size):, :, :]).float().to(device)
+    test_logsig_rand = torchcde.logsig_windows(X_rand[(-test_size):, :, :].float().to(device), depth, window_length=window_length_rand)
+    test_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(test_logsig_rand).float().to(device)
+    # test_rand_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_rand[(-test_size):, :, :]).float().to(device)
 
     output_dim = Y.shape[-1]
-    # input_dim = train_logsig.shape[-1]
-    input_dim = X_even.shape[-1]
+    input_dim = train_logsig.shape[-1]
+    # input_dim = X_even.shape[-1]
     latent_dim = args.latents
     del Y
     del X_even
@@ -201,9 +203,9 @@ if __name__ == '__main__':
 
     optimizer = optim.Adam(
         [
-            {"params": model.initial.parameters(), "lr": args.lr*1e2},
+            {"params": model.initial.parameters(), "lr": args.lr*1e1},
             {"params": model.cde_func.parameters(), "lr": args.lr},
-            {"params": model.readout.parameters(), "lr": args.lr*1e2},
+            {"params": model.readout.parameters(), "lr": args.lr*1e1},
         ],
         lr=args.lr
         )
@@ -220,13 +222,13 @@ if __name__ == '__main__':
         print(f'Epoch {epoch}, Learning Rate {lr}')
         writer.add_scalar('learning_rate', lr, epoch)
         
-        if epoch % 2 == 0:
-            e_dataloader = train_dataloader
-            print('Using regular data')
-        else:
-            e_dataloader = train_rand_dataloader
-            print('Using irregular data')
-        # e_dataloader = train_mix_dataloader
+        # if epoch % 2 == 0:
+        #     e_dataloader = train_dataloader
+        #     print('Using regular data')
+        # else:
+        #     e_dataloader = train_rand_dataloader
+        #     print('Using irregular data')
+        e_dataloader = train_mix_dataloader
         # e_dataloader = train_dataloader
         num_batches = len(e_dataloader)
             
@@ -239,8 +241,9 @@ if __name__ == '__main__':
 
             pred_y = model(batch_coeffs)
 
-            mse_log10q = torch.mean((batch_y[:, 0] / np.log(10) - pred_y[:, 0] / np.log(10))**2).detach().cpu() * std_y[0]
-            mse_log10s = torch.mean((batch_y[:, 1] / np.log(10) - pred_y[:, 1] / np.log(10))**2).detach().cpu() * std_y[1]
+            # mse_log10q = torch.mean((batch_y[:, 0] / np.log(10) - pred_y[:, 0] / np.log(10))**2).detach().cpu() * std_y[0]
+            # mse_log10s = torch.mean((batch_y[:, 1] / np.log(10) - pred_y[:, 1] / np.log(10))**2).detach().cpu() * std_y[1]
+            mse = torch.mean((batch_y - pred_y)**2, dim=0).detach().cpu()
             loss = loss_func(pred_y, batch_y)
             loss.backward()
 
@@ -255,10 +258,19 @@ if __name__ == '__main__':
 
             optimizer.step()
 
-            print(f'batch {i}/{num_batches}, loss {loss.item()}, mse_log10q {mse_log10q.item()}, mse_log10s {mse_log10s.item()}')
+            # print(f'batch {i}/{num_batches}, loss {loss.item()}, mse_log10q {mse_log10q.item()}, mse_log10s {mse_log10s.item()}')
+            # writer.add_scalar('loss/batch_loss', loss.item(), (i + epoch * num_batches))
+            # writer.add_scalar('mse/batch_mse_log10q', mse_log10q.item(), (i + epoch * num_batches))
+            # writer.add_scalar('mse/batch_mse_log10s', mse_log10s.item(), (i + epoch * num_batches))
+
+            print(f'batch {i}/{num_batches}, loss {loss.item()}, mse {mse}')
             writer.add_scalar('loss/batch_loss', loss.item(), (i + epoch * num_batches))
-            writer.add_scalar('mse/batch_mse_log10q', mse_log10q.item(), (i + epoch * num_batches))
-            writer.add_scalar('mse/batch_mse_log10s', mse_log10s.item(), (i + epoch * num_batches))
+            writer.add_scalar('mse_batch/batch_mse_log10q', mse[2], (i + epoch * num_batches))
+            writer.add_scalar('mse_batch/batch_mse_log10s', mse[3], (i + epoch * num_batches))
+            writer.add_scalar('mse_batch/batch_mse_u0', mse[0], (i + epoch * num_batches))
+            writer.add_scalar('mse_batch/batch_mse_rho', mse[1], (i + epoch * num_batches))
+            writer.add_scalar('mse_batch/batch_mse_cosa', mse[4], (i + epoch * num_batches))
+            writer.add_scalar('mse_batch/batch_mse_sina', mse[5], (i + epoch * num_batches))
 
             # for param_group in optimizer.param_groups:
             #     lr = param_group['lr']
@@ -278,22 +290,32 @@ if __name__ == '__main__':
                     pred_y = model(test_coeffs)
                     loss = loss_func(pred_y, test_Y)
 
-                    mse_log10q = torch.mean((test_Y[:, 0] / np.log(10) - pred_y[:, 0] / np.log(10))**2).detach().cpu() * std_y[0]
-                    mse_log10s = torch.mean((test_Y[:, 1] / np.log(10) - pred_y[:, 1] / np.log(10))**2).detach().cpu() * std_y[1]
-
+                    # mse_log10q = torch.mean((test_Y[:, 0] / np.log(10) - pred_y[:, 0] / np.log(10))**2).detach().cpu() * std_y[0]
+                    # mse_log10s = torch.mean((test_Y[:, 1] / np.log(10) - pred_y[:, 1] / np.log(10))**2).detach().cpu() * std_y[1]
+                    mse = torch.mean((test_Y - pred_y)**2, dim=0).detach().cpu()
                     pred_y_rand = model(test_rand_coeffs)
                     loss_rand = loss_func(pred_y_rand, test_Y)
 
                     mse_log10q_rand = torch.mean((test_Y[:, 0] / np.log(10) - pred_y_rand[:, 0] / np.log(10))**2).detach().cpu() * std_y[0]
                     mse_log10s_rand = torch.mean((test_Y[:, 1] / np.log(10) - pred_y_rand[:, 1] / np.log(10))**2).detach().cpu() * std_y[1]
+                    mse_rand = torch.mean((test_Y - pred_y_rand)**2, dim=0).detach().cpu()
 
-                    message = f'Epoch {(i + epoch * num_batches)/20}, Test Loss {loss.item()}, mse_log10q {mse_log10q.item()}, mse_log10s {mse_log10s.item()}, loss_rand {loss_rand.item()}, mse_log10q_rand {mse_log10q_rand.item()}, mse_log10s_rand {mse_log10s_rand.item()}'
+                    message = f'Epoch {(i + epoch * num_batches)/20}, Test Loss {loss.item()}, mse {mse}, loss_rand {loss_rand.item()}, mse_rand {mse_rand}'
                     writer.add_scalar('loss/test_loss', loss.item(), (i + epoch * num_batches)/20)
                     writer.add_scalar('loss/test_loss_rand', loss_rand.item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse/test_mse_log10q', mse_log10q.item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse/test_mse_log10s', mse_log10s.item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse/test_mse_log10q_rand', mse_log10q_rand.item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse/test_mse_log10s_rand', mse_log10s_rand.item(), (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse/test_mse_log10q', mse[2], (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse/test_mse_log10s', mse[3], (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse/test_mse_u0', mse[0], (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse/test_mse_rho', mse[1], (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse/test_mse_cosa', mse[4], (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse/test_mse_sina', mse[5], (i + epoch * num_batches)/20)
+
+                    writer.add_scalar('mse_rand/test_mse_log10q_rand', mse_rand[2].item(), (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse_rand/test_mse_log10s_rand', mse_rand[3].item(), (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse_rand/test_mse_u0', mse_rand[0].item(), (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse_rand/test_mse_rho', mse_rand[1].item(), (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse_rand/test_mse_cosa', mse_rand[4].item(), (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse_rand/test_mse_sina', mse_rand[5].item(), (i + epoch * num_batches)/20)
                     for name, param in model.named_parameters():
                         writer.add_histogram(name, param.clone().cpu().data.numpy(), (i + epoch * num_batches)/20)
                     # logger.info("Experiment " + str(experimentID))

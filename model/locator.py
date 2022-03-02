@@ -23,6 +23,7 @@ class Locator(nn.Module):
         self.loss = utils.SoftDiceLoss()
         self.threshold = 0.5
         self.animate = False
+        self.crop = False
        
     def forward(self, coeffs, y):
         X = torchcde.CubicSpline(coeffs)
@@ -55,7 +56,7 @@ class Locator(nn.Module):
         # plt.plot(timelist[0].cpu(), diffz[0].cpu().detach().numpy()+14)
         # plt.show()
 
-        if self.training:
+        if self.crop and self.training:
             length = (torch.rand((1)).to(self.device) + 1) / 2 * (X.interval[-1] - X.interval[0])
             left = torch.rand((1)).to(self.device) * (X.interval[-1] - length - X.interval[0]) + X.interval[0]
             interval = torch.linspace(left.item(), left.item() + length.item(), self.n_intervals).to(self.device)
