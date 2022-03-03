@@ -1,3 +1,7 @@
+# KMT files
+*.pysis
+*.npy
+
 # package
 torchcde/
 

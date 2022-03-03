@@ -30,11 +30,11 @@ parser.add_argument('--load', type=str, default=None, help="ID of the experiment
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
 parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
 
-parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the latent state")
+parser.add_argument('-l', '--latents', type=int, default=64, help="Dim of the latent state")
 
 args = parser.parse_args()
 
-device = torch.device("cuda:4" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
