@@ -15,7 +15,8 @@ class Scaler(nn.Module):
         super(Scaler, self).__init__()
         self.input_dim = input_dim
         self.latent_dim = latent_dim
-        self.n_cnn_intervals = 2048
+        # self.n_cnn_intervals = 2048
+        self.n_cnn_intervals = 4096
         self.device = device
 
         self.initial = nn.Sequential(
@@ -26,6 +27,7 @@ class Scaler(nn.Module):
 
         self.cnn_featurizer = nn.Sequential(
             nn.Conv1d(latent_dim, 256, kernel_size=15, stride=2, padding=7), nn.PReLU(),
+            nn.Conv1d(256, 256, kernel_size=15, stride=2, padding=7), nn.PReLU(),
             nn.Conv1d(256, 512, kernel_size=15, stride=2, padding=7), nn.PReLU(),
             *[utils.CNNResBlock(512, 128, nonlinear=nn.PReLU, layernorm=True) for i in range(15)],
             nn.Conv1d(512, 128, kernel_size=15, stride=2, padding=7), nn.PReLU(),

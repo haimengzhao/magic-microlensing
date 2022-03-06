@@ -34,7 +34,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:8" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -70,7 +70,7 @@ if __name__ == '__main__':
         X_even = torch.tensor(dataset_file['X_even'][...])
         X_rand = torch.tensor(dataset_file['X_random'][...])
 
-    test_size = 1024
+    test_size = 128
     train_size = len(Y) - test_size
     # train_size = 128
 

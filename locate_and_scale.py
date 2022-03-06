@@ -1,6 +1,5 @@
 import numpy as np
 import h5py
-from sympy import lcm
 import torch
 import torchcde
 from tqdm import tqdm
@@ -10,10 +9,11 @@ from model.locator import Locator
 from model.scaler import Scaler
 
 use_ground_truth = False
+use_ground_truth_fs = False
 
 dataset = '/work/hmzhao/irregular-lc/roman-0-8dof.h5'
-device_1 = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
-device_2 = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+device_1 = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+device_2 = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 
 if __name__ == '__main__':
     with h5py.File(dataset, mode='r') as dataset_file:
@@ -97,6 +97,10 @@ if __name__ == '__main__':
             pred_rand[i*batchsize:min(i*batchsize+batchsize, len(Y))] = model_loc(batch_rand, z[:len(batch_rand)])[0].detach().cpu()
             pred_rand_s[i*batchsize:min(i*batchsize+batchsize, len(Y))] = model_sca(batch_rand).detach().cpu()
 
+    if use_ground_truth_fs:
+        pred_s = torch.log10(Y[:, [-1]])
+        pred_rand_s = torch.log10(Y[:, [-1]])
+
     # transform
     X_even[:, :, 0] = (X_even[:, :, 0] - pred[:, [0]]) / pred[:, [1]]
     X_even[:, :, 1] = 10. ** ((22 - X_even[:, :, 1]) / 2.5)
@@ -141,7 +145,10 @@ if __name__ == '__main__':
     if use_ground_truth:
         filename = dataset[:-3]+'-located-logsig-gt.h5'
     else:
-        filename = dataset[:-3]+'-located-logsig.h5'
+        if use_ground_truth_fs:
+            filename = dataset[:-3]+'-located-logsig-fs.h5'
+        else:
+            filename = dataset[:-3]+'-located-logsig.h5'
 
     with h5py.File(filename, mode='w') as dataset_file:
         dataset_file['Y'] = Y

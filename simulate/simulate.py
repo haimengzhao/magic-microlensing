@@ -242,13 +242,13 @@ def simulate_batch(batch_size, relative_uncertainty, time_settings_random, time_
 
     pbar.close()
 
-    with h5py.File(f'/work/hmzhao/irregular-lc/roman-{b}-8dof.h5', 'w') as opt:
+    with h5py.File(f'/work/hmzhao/irregular-lc/roman-{b+1}-8dof.h5', 'w') as opt:
         opt['X_random'] = X_random
         opt['X_even'] = X_even
         opt['Y'] = Y
     
     time_end = time.time()
-    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/roman-{b}-8dof.h5, size {batch_size}, use time: {time_end - time_start}s\n')
+    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/roman-{b+1}-8dof.h5, size {batch_size}, use time: {time_end - time_start}s\n')
     log.close()
 
         
