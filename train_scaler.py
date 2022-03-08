@@ -34,7 +34,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:4" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -83,8 +83,11 @@ if __name__ == '__main__':
     Y[:, -4] = torch.log10(Y[:, -4])
     Y[:, -5] = torch.log10(Y[:, -5])
     std_Y = torch.tensor([50, 5, 1, 1, 1, 0.1, 360, 1])
-    Y = Y / std_Y
+    # Y = Y / std_Y
     Y = Y[nanind]
+
+    X_even[:, :, 0] = (X_even[:, :, 0] - Y[:, [0]]) / Y[:, [1]]
+
     Y = Y[:, [-1]]
     std_Y = std_Y[[-1]]
     
