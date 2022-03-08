@@ -11,9 +11,9 @@ from model.scaler import Scaler
 use_ground_truth = False
 use_ground_truth_fs = False
 
-dataset = '/work/hmzhao/irregular-lc/roman-0-8dof.h5'
-device_1 = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
-device_2 = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+dataset = '/work/hmzhao/irregular-lc/roman-1-8dof.h5'
+device_1 = torch.device("cuda:4" if torch.cuda.is_available() else "cpu")
+device_2 = torch.device("cuda:4" if torch.cuda.is_available() else "cpu")
 
 if __name__ == '__main__':
     with h5py.File(dataset, mode='r') as dataset_file:
@@ -61,7 +61,7 @@ if __name__ == '__main__':
 
         # load scaler
         print('loading scaler')
-        checkpt = torch.load('/work/hmzhao/experiments/scaler/best_rand_scaler_8dof.ckpt', map_location='cpu')
+        checkpt = torch.load('/work/hmzhao/experiments/scaler/experiment_76990.ckpt', map_location='cpu')
         ckpt_args = checkpt['args']
         state_dict = checkpt['state_dict']
 
@@ -116,18 +116,24 @@ if __name__ == '__main__':
     max_len_rand = 0
     lc_rand = []
     for i in tqdm(range(len(Y))):
-        lc = X_even[i]
-        lc = lc[torch.where((lc[:, 0] <= 2) * (lc[:, 0] >= -2))]
-        depth = 3; window_length = len(lc)//100
-        lc = torchcde.logsig_windows(lc, depth, window_length=window_length)
-        max_len_even = max(max_len_even, len(lc))
-        lc = torch.cat([lc, lc[-1].expand(X_even.shape[1] - len(lc), lc.shape[-1])])
-        lc_even.append(lc)
+        try:
+            lc = X_even[i]
+            lc = lc[torch.where((lc[:, 0] <= 2) * (lc[:, 0] >= -2))]
+            depth = 3; window_length = max(len(lc)//100, 1)
+            lc = torchcde.logsig_windows(lc, depth, window_length=window_length)
+            max_len_even = max(max_len_even, len(lc))
+            lc = torch.cat([lc, lc[-1].expand(X_even.shape[1] - len(lc), lc.shape[-1])])
+            lc_even.append(lc)
+        except:
+            print(X_even[i, :, 0])
+            plt.plot(X_even[i, :, 0], X_even[i, :, 1])
+            plt.show()
+            lc_rand.append(torch.ones(X_rand.shape[1], (lc_rand[-1]).shape[-1])*np.nan)
 
         try:
             lc = X_rand[i]
             lc = lc[torch.where((lc[:, 0] <= 2) * (lc[:, 0] >= -2))]
-            depth = 3; window_length = len(lc)//100
+            depth = 3; window_length = max(len(lc)//100, 1)
             lc = torchcde.logsig_windows(lc, depth, window_length=window_length)
             max_len_rand = max(max_len_rand, len(lc))
             lc = torch.cat([lc, lc[-1].expand(X_rand.shape[1] - len(lc), lc.shape[-1])])

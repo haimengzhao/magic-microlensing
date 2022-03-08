@@ -34,7 +34,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -53,7 +53,7 @@ if __name__ == '__main__':
         experimentID = int(SystemRandom().random() * 100000)
     print(f'ExperimentID: {experimentID}')
     ckpt_path = os.path.join(args.save, "experiment_" + str(experimentID) + '.ckpt')
-    ckpt_path_load = os.path.join(args.save, "experiment_" + '00' + '.ckpt')
+    ckpt_path_load = os.path.join(args.save, "experiment_" + '0' + '.ckpt')
     # ckpt_path_load = ckpt_path
     
     input_command = sys.argv
@@ -78,12 +78,17 @@ if __name__ == '__main__':
     X_even = X_even[nanind]
     X_rand = X_rand[nanind]
 
+    nanind = torch.where(~torch.isnan(X_rand[:, 0, 1]))[0]
+    Y = Y[nanind]
+    X_even = X_even[nanind]
+    X_rand = X_rand[nanind]
+
     # nanind = torch.where(Y[:, 4]>1e-4)[0]
     # Y = Y[nanind]
     # X_even = X_even[nanind]
     # X_rand = X_rand[nanind]
 
-    test_size = 512
+    test_size = 1024
     train_size = len(Y) - test_size
     # train_size = 128
     print(f'Training Set Size: {train_size}')
@@ -92,10 +97,11 @@ if __name__ == '__main__':
     # # normalize
     # Y: t_0, t_E, u_0, rho, q, s, alpha, f_s
     Y[:, 3:6] = torch.log10(Y[:, 3:6])
-    Y[:, 7] = torch.sin(Y[:, 6] / 180 * np.pi)
+    # Y[:, 7] = torch.sin(Y[:, 6] / 180 * np.pi)
     # Y = torch.hstack([Y, torch.sin(Y[:, [6]] / 180 * np.pi)])
-    Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
-    Y = Y[:, 2:]
+    # Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
+    Y[:, 6] = Y[:, 6] / 180 * np.pi
+    Y = Y[:, 2:7]
     mean_y = torch.mean(Y, axis=0)
     std_y = torch.std(Y, axis=0)
     # std_mask = (std_y==0)
@@ -168,7 +174,7 @@ if __name__ == '__main__':
         model_dict = model.state_dict()
 
         # 1. filter out unnecessary keys
-        state_dict = {k: v for k, v in state_dict.items() if k in model_dict}
+        state_dict = {k: v for k, v in state_dict.items() if ((k in model_dict) and ('readout' not in k) and ('readout' not in k) and ('mdn' not in k))}
         # 2. overwrite entries in the existing state dict
         model_dict.update(state_dict) 
         # 3. load the new state dict
@@ -186,10 +192,11 @@ if __name__ == '__main__':
 
     optimizer = optim.Adam(
         [
-            {"params": model.parameters(), "lr": args.lr},
-            # {"params": model.initial.parameters(), "lr": args.lr*1e2},
-            # {"params": model.cde_func.parameters(), "lr": args.lr},
-            # {"params": model.readout.parameters(), "lr": args.lr*1e2},
+            # {"params": model.parameters(), "lr": args.lr},
+            {"params": model.initial.parameters(), "lr": args.lr/10},
+            {"params": model.cde_func.parameters(), "lr": args.lr/10},
+            {"params": model.readout.parameters(), "lr": args.lr},
+            {"params": model.mdn.parameters(), "lr": args.lr},
         ],
         lr=args.lr
         )
@@ -246,8 +253,9 @@ if __name__ == '__main__':
             writer.add_scalar('mse_batch/batch_mse_log10s', mse[3], (i + epoch * num_batches))
             writer.add_scalar('mse_batch/batch_mse_u0', mse[0], (i + epoch * num_batches))
             writer.add_scalar('mse_batch/batch_mse_rho', mse[1], (i + epoch * num_batches))
-            writer.add_scalar('mse_batch/batch_mse_cosa', mse[4], (i + epoch * num_batches))
-            writer.add_scalar('mse_batch/batch_mse_sina', mse[5], (i + epoch * num_batches))
+            writer.add_scalar('mse_batch/batch_mse_a', mse[4], (i + epoch * num_batches))
+            # writer.add_scalar('mse_batch/batch_mse_cosa', mse[4], (i + epoch * num_batches))
+            # writer.add_scalar('mse_batch/batch_mse_sina', mse[5], (i + epoch * num_batches))
 
             # for param_group in optimizer.param_groups:
             #     lr = param_group['lr']
@@ -283,15 +291,17 @@ if __name__ == '__main__':
                     writer.add_scalar('mse/test_mse_log10s', mse[3], (i + epoch * num_batches)/20)
                     writer.add_scalar('mse/test_mse_u0', mse[0], (i + epoch * num_batches)/20)
                     writer.add_scalar('mse/test_mse_rho', mse[1], (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse/test_mse_cosa', mse[4], (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse/test_mse_sina', mse[5], (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse/test_mse_a', mse[4], (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse/test_mse_cosa', mse[4], (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse/test_mse_sina', mse[5], (i + epoch * num_batches)/20)
 
                     writer.add_scalar('mse_rand/test_mse_log10q_rand', mse_rand[2].item(), (i + epoch * num_batches)/20)
                     writer.add_scalar('mse_rand/test_mse_log10s_rand', mse_rand[3].item(), (i + epoch * num_batches)/20)
                     writer.add_scalar('mse_rand/test_mse_u0', mse_rand[0].item(), (i + epoch * num_batches)/20)
                     writer.add_scalar('mse_rand/test_mse_rho', mse_rand[1].item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse_rand/test_mse_cosa', mse_rand[4].item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse_rand/test_mse_sina', mse_rand[5].item(), (i + epoch * num_batches)/20)
+                    writer.add_scalar('mse_rand/test_mse_a', mse_rand[4].item(), (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse_rand/test_mse_cosa', mse_rand[4].item(), (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse_rand/test_mse_sina', mse_rand[5].item(), (i + epoch * num_batches)/20)
 
                     for name, param in model.named_parameters():
                         writer.add_histogram(name, param.clone().cpu().data.numpy(), (i + epoch * num_batches)/20)
