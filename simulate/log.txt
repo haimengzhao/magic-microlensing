@@ -1,2 +1,0 @@
-Simulating 1 batches of 100000 lightcurves
-####################

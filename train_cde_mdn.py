@@ -110,7 +110,7 @@ if __name__ == '__main__':
     # X_even[:, :, 1] = 10**((22-X_even[:, :, 1])/2.5)/1000
     # X_even[:, :, 1] = 22 - 2.5*torch.log10(1000*X_even[:, :, 1])
     X = X[:, :, :2]
-    X[:, :, 1] = (X[:, :, 1] - mean_x_even + 2.5 * Y[:, [-1]])
+    X[:, :, 1] = (X[:, :, 1] - mean_x_even - 2.5 * Y[:, [-1]])
     print(f'normalized X mean: {torch.mean(X[:, :, 1])}\nX std: {torch.mean(torch.std(X[:, :, 1], axis=0))}')
     # X_rand = X_rand[:, :, :2]
     # X_rand[:, :, 1] = 10**((22-X_rand[:, :, 1])/2.5)/1000
@@ -359,7 +359,7 @@ if __name__ == '__main__':
         # X_even[:, :, 1] = 10**((22-X_even[:, :, 1])/2.5)/1000
         # X_even[:, :, 1] = 22 - 2.5*torch.log10(1000*X_even[:, :, 1])
         X = X[:, :, :2]
-        X[:, :, 1] = (X[:, :, 1] - mean_x_even + 2.5 * Y[:, [-1]])
+        X[:, :, 1] = (X[:, :, 1] - mean_x_even - 2.5 * Y[:, [-1]])
         print(f'normalized X mean: {torch.mean(X[:, :, 1])}\nX std: {torch.mean(torch.std(X[:, :, 1], axis=0))}')
         # X_rand = X_rand[:, :, :2]
         # X_rand[:, :, 1] = 10**((22-X_rand[:, :, 1])/2.5)/1000
