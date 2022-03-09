@@ -344,7 +344,7 @@ if __name__ == '__main__':
         # Y[:, 7] = torch.sin(Y[:, 6] / 180 * np.pi)
         # Y = torch.hstack([Y, torch.sin(Y[:, [6]] / 180 * np.pi)])
         # Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
-        Y[:, 6] = Y[:, 6] / 180 * np.pi
+        Y[:, 6] = Y[:, 6] / 180 # * np.pi
         Y = Y[:, 2:8]
         mean_y = torch.mean(Y, axis=0)
         std_y = torch.std(Y, axis=0)
