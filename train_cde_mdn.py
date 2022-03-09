@@ -106,11 +106,11 @@ if __name__ == '__main__':
     # print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
 
     mean_x_even = 14.5
-    std_x_even = 0.2
+    # std_x_even = 0.2
     # X_even[:, :, 1] = 10**((22-X_even[:, :, 1])/2.5)/1000
     # X_even[:, :, 1] = 22 - 2.5*torch.log10(1000*X_even[:, :, 1])
     X = X[:, :, :2]
-    X[:, :, 1] = (X[:, :, 1] - mean_x_even) / std_x_even
+    X[:, :, 1] = (X[:, :, 1] - mean_x_even + 2.5 * Y[:, [-1]])
     print(f'normalized X mean: {torch.mean(X[:, :, 1])}\nX std: {torch.mean(torch.std(X[:, :, 1], axis=0))}')
     # X_rand = X_rand[:, :, :2]
     # X_rand[:, :, 1] = 10**((22-X_rand[:, :, 1])/2.5)/1000
@@ -277,15 +277,15 @@ if __name__ == '__main__':
 
                     mse = torch.mean((test_Y - pred_y)**2, dim=0).detach().cpu()
 
-                    pi, normal = model(test_rand_coeffs)
-                    loss_rand = model.mdn_loss(pi, normal, test_Y)
-                    pred_y_rand = model.sample(pi, normal)
+                    # pi, normal = model(test_rand_coeffs)
+                    # loss_rand = model.mdn_loss(pi, normal, test_Y)
+                    # pred_y_rand = model.sample(pi, normal)
 
-                    mse_rand = torch.mean((test_Y - pred_y_rand)**2, dim=0).detach().cpu()
+                    # mse_rand = torch.mean((test_Y - pred_y_rand)**2, dim=0).detach().cpu()
 
-                    message = f'Epoch {(i + epoch * num_batches)/num_batches}, Test Loss {loss.item()}, mse {mse}, loss_rand {loss_rand.item()}, mse_rand {mse_rand}'
+                    message = f'Epoch {(i + epoch * num_batches)/num_batches}, Test Loss {loss.item()}, mse {mse}'
                     writer.add_scalar('loss/test_loss', loss.item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('loss/test_loss_rand', loss_rand.item(), (i + epoch * num_batches)/20)
+                    # writer.add_scalar('loss/test_loss_rand', loss_rand.item(), (i + epoch * num_batches)/20)
                     writer.add_scalar('mse/test_mse_log10q', mse[2], (i + epoch * num_batches)/20)
                     writer.add_scalar('mse/test_mse_log10s', mse[3], (i + epoch * num_batches)/20)
                     writer.add_scalar('mse/test_mse_u0', mse[0], (i + epoch * num_batches)/20)
@@ -295,12 +295,12 @@ if __name__ == '__main__':
                     # writer.add_scalar('mse/test_mse_cosa', mse[4], (i + epoch * num_batches)/20)
                     # writer.add_scalar('mse/test_mse_sina', mse[5], (i + epoch * num_batches)/20)
 
-                    writer.add_scalar('mse_rand/test_mse_log10q_rand', mse_rand[2].item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse_rand/test_mse_log10s_rand', mse_rand[3].item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse_rand/test_mse_u0', mse_rand[0].item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse_rand/test_mse_rho', mse_rand[1].item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse_rand/test_mse_a', mse_rand[4].item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse_rand/test_mse_log10fs', mse_rand[4].item(), (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse_rand/test_mse_log10q_rand', mse_rand[2].item(), (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse_rand/test_mse_log10s_rand', mse_rand[3].item(), (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse_rand/test_mse_u0', mse_rand[0].item(), (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse_rand/test_mse_rho', mse_rand[1].item(), (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse_rand/test_mse_a', mse_rand[4].item(), (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse_rand/test_mse_log10fs', mse_rand[4].item(), (i + epoch * num_batches)/20)
                     # writer.add_scalar('mse_rand/test_mse_cosa', mse_rand[4].item(), (i + epoch * num_batches)/20)
                     # writer.add_scalar('mse_rand/test_mse_sina', mse_rand[5].item(), (i + epoch * num_batches)/20)
 
@@ -355,11 +355,11 @@ if __name__ == '__main__':
         # print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
 
         mean_x_even = 14.5
-        std_x_even = 0.2
+        # std_x_even = 0.2
         # X_even[:, :, 1] = 10**((22-X_even[:, :, 1])/2.5)/1000
         # X_even[:, :, 1] = 22 - 2.5*torch.log10(1000*X_even[:, :, 1])
         X = X[:, :, :2]
-        X[:, :, 1] = (X[:, :, 1] - mean_x_even) / std_x_even
+        X[:, :, 1] = (X[:, :, 1] - mean_x_even + 2.5 * Y[:, [-1]])
         print(f'normalized X mean: {torch.mean(X[:, :, 1])}\nX std: {torch.mean(torch.std(X[:, :, 1], axis=0))}')
         # X_rand = X_rand[:, :, :2]
         # X_rand[:, :, 1] = 10**((22-X_rand[:, :, 1])/2.5)/1000

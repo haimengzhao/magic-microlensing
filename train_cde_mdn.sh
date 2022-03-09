@@ -8,4 +8,4 @@ cd $PBS_O_WORKDIR
 source /opt/miniconda3/etc/profile.d/conda.sh
 conda activate ode-rnn
 
-python train_cde_mdn.py --load 02 --resume 3
+python train_cde_mdn.py
