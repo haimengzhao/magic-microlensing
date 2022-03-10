@@ -21,7 +21,7 @@ from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser('CDE-MDN')
 parser.add_argument('--niters', type=int, default=1000)
-parser.add_argument('--lr',  type=float, default=1e-5, help="Starting learning rate")
+parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-0.h5', help="Path for dataset")
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
@@ -35,7 +35,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -110,7 +110,7 @@ if __name__ == '__main__':
     # X_even[:, :, 1] = 10**((22-X_even[:, :, 1])/2.5)/1000
     # X_even[:, :, 1] = 22 - 2.5*torch.log10(1000*X_even[:, :, 1])
     X = X[:, :, :2]
-    X[:, :, 1] = (X[:, :, 1] - mean_x_even - 2.5 * Y[:, [-1]])
+    X[:, :, 1] = (X[:, :, 1] - mean_x_even - 2.5 * Y[:, [-1]]) / 0.2
     print(f'normalized X mean: {torch.mean(X[:, :, 1])}\nX std: {torch.mean(torch.std(X[:, :, 1], axis=0))}')
     # X_rand = X_rand[:, :, :2]
     # X_rand[:, :, 1] = 10**((22-X_rand[:, :, 1])/2.5)/1000
@@ -204,7 +204,7 @@ if __name__ == '__main__':
     num_batches = len(train_dataloader)
 
     for epoch in range(args.resume, args.resume + args.niters):
-        utils.update_learning_rate(optimizer, decay_rate = 0.9, lowest = args.lr / 100)
+        utils.update_learning_rate(optimizer, decay_rate = 0.99, lowest = args.lr / 100)
         lr = optimizer.state_dict()['param_groups'][0]['lr']
         print(f'Epoch {epoch}, Learning Rate {lr}')
         writer.add_scalar('learning_rate', lr, epoch)
@@ -359,7 +359,7 @@ if __name__ == '__main__':
         # X_even[:, :, 1] = 10**((22-X_even[:, :, 1])/2.5)/1000
         # X_even[:, :, 1] = 22 - 2.5*torch.log10(1000*X_even[:, :, 1])
         X = X[:, :, :2]
-        X[:, :, 1] = (X[:, :, 1] - mean_x_even - 2.5 * Y[:, [-1]])
+        X[:, :, 1] = (X[:, :, 1] - mean_x_even - 2.5 * Y[:, [-1]]) / 0.2
         print(f'normalized X mean: {torch.mean(X[:, :, 1])}\nX std: {torch.mean(torch.std(X[:, :, 1], axis=0))}')
         # X_rand = X_rand[:, :, :2]
         # X_rand[:, :, 1] = 10**((22-X_rand[:, :, 1])/2.5)/1000
