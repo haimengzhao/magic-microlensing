@@ -21,7 +21,7 @@ from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser('CDE-MDN')
 parser.add_argument('--niters', type=int, default=1000)
-parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
+parser.add_argument('--lr',  type=float, default=1e-5, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-0.h5', help="Path for dataset")
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
@@ -35,7 +35,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -54,8 +54,8 @@ if __name__ == '__main__':
         experimentID = int(SystemRandom().random() * 100000)
     print(f'ExperimentID: {experimentID}')
     ckpt_path = os.path.join(args.save, "experiment_" + str(experimentID) + '.ckpt')
-    # ckpt_path_load = os.path.join(args.save, "experiment_" + '0' + '.ckpt')
-    ckpt_path_load = ckpt_path
+    ckpt_path_load = os.path.join(args.save, "experiment_" + '21160' + '.ckpt')
+    # ckpt_path_load = ckpt_path
     
     input_command = sys.argv
     ind = [i for i in range(len(input_command)) if input_command[i] == "--load"]
