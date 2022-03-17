@@ -1,3 +1,6 @@
+# server scripts
+*.sh
+
 # KMT files
 *.pysis
 *.npy
