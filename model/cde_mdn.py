@@ -44,12 +44,12 @@ class CDE_MDN(nn.Module):
     '''
     A Neural CDE Mixture Density Network.
     '''
-    def __init__(self, input_dim, latent_dim, output_dim):
+    def __init__(self, input_dim, latent_dim, output_dim, n_gaussian=12):
         super(CDE_MDN, self).__init__()
         self.input_dim = input_dim
         self.latent_dim = latent_dim
         self.output_dim = output_dim
-        self.n_gaussian = 12
+        self.n_gaussian = n_gaussian
 
         self.cde_func = CDEFunc(input_dim, latent_dim)
         self.initial = nn.Sequential(

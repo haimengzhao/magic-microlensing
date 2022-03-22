@@ -21,7 +21,7 @@ from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser('CDE-MDN')
 parser.add_argument('--niters', type=int, default=1000)
-parser.add_argument('--lr',  type=float, default=1e-5, help="Starting learning rate")
+parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-0.h5', help="Path for dataset")
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
@@ -35,7 +35,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -54,7 +54,7 @@ if __name__ == '__main__':
         experimentID = int(SystemRandom().random() * 100000)
     print(f'ExperimentID: {experimentID}')
     ckpt_path = os.path.join(args.save, "experiment_" + str(experimentID) + '.ckpt')
-    ckpt_path_load = os.path.join(args.save, "experiment_" + '2' + '.ckpt')
+    ckpt_path_load = os.path.join(args.save, "experiment_" + '3' + '.ckpt')
     # ckpt_path_load = ckpt_path
     
     input_command = sys.argv
@@ -82,15 +82,15 @@ if __name__ == '__main__':
     # X_even = X_even[nanind]
     # X_rand = X_rand[nanind]
 
-    n_chunks = 25
-    gap_len = int(500 / n_chunks)
-    gap_left = torch.randint(0, X.shape[1]-gap_len, (len(X),))
-    X_gap = torch.zeros((X.shape[0], X.shape[1]-gap_len, X.shape[2]))
-    for i in range(len(X)):
-        left, gap, right = torch.split(X[i], [gap_left[i], gap_len, X.shape[1]-gap_left[i]-gap_len], dim=0)
-        lc = torch.vstack([left, right])
-        X_gap[i] = lc
-    X = X_gap
+    # n_chunks = 25
+    # gap_len = int(500 / n_chunks)
+    # gap_left = torch.randint(0, X.shape[1]-gap_len, (len(X),))
+    # X_gap = torch.zeros((X.shape[0], X.shape[1]-gap_len, X.shape[2]))
+    # for i in range(len(X)):
+    #     left, gap, right = torch.split(X[i], [gap_left[i], gap_len, X.shape[1]-gap_left[i]-gap_len], dim=0)
+    #     lc = torch.vstack([left, right])
+    #     X_gap[i] = lc
+    # X = X_gap
 
     test_size = 1024
     train_size = len(Y) - test_size
@@ -170,7 +170,7 @@ if __name__ == '__main__':
     gc.collect()
     ##################################################################
     # Create the model
-    model = CDE_MDN(input_dim, latent_dim, output_dim).to(device)
+    model = CDE_MDN(input_dim, latent_dim, output_dim, 32).to(device)
     ##################################################################
     # Load checkpoint and evaluate the model
     if args.load is not None:
@@ -336,15 +336,15 @@ if __name__ == '__main__':
         Y = Y[nanind]
         X = X[nanind]
 
-        n_chunks = 25
-        gap_len = int(500 / n_chunks)
-        gap_left = torch.randint(0, X.shape[1]-gap_len, (len(X),))
-        X_gap = torch.zeros((X.shape[0], X.shape[1]-gap_len, X.shape[2]))
-        for i in range(len(X)):
-            left, gap, right = torch.split(X[i], [gap_left[i], gap_len, X.shape[1]-gap_left[i]-gap_len], dim=0)
-            lc = torch.vstack([left, right])
-            X_gap[i] = lc
-        X = X_gap
+        # n_chunks = 25
+        # gap_len = int(500 / n_chunks)
+        # gap_left = torch.randint(0, X.shape[1]-gap_len, (len(X),))
+        # X_gap = torch.zeros((X.shape[0], X.shape[1]-gap_len, X.shape[2]))
+        # for i in range(len(X)):
+        #     left, gap, right = torch.split(X[i], [gap_left[i], gap_len, X.shape[1]-gap_left[i]-gap_len], dim=0)
+        #     lc = torch.vstack([left, right])
+        #     X_gap[i] = lc
+        # X = X_gap
 
         # nanind = torch.where(Y[:, 4]>1e-4)[0]
         # Y = Y[nanind]
