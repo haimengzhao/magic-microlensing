@@ -35,7 +35,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -105,7 +105,7 @@ if __name__ == '__main__':
     # Y[:, 7] = torch.sin(Y[:, 6] / 180 * np.pi)
     # Y = torch.hstack([Y, torch.sin(Y[:, [6]] / 180 * np.pi)])
     # Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
-    Y[:, 6] = Y[:, 6] / 180 # * np.pi
+    Y[:, 6] = Y[:, 6] #/ 180 # * np.pi
     Y = Y[:, 2:8]
     mean_y = torch.mean(Y, axis=0)
     std_y = torch.std(Y, axis=0)
@@ -364,7 +364,7 @@ if __name__ == '__main__':
         # Y[:, 7] = torch.sin(Y[:, 6] / 180 * np.pi)
         # Y = torch.hstack([Y, torch.sin(Y[:, [6]] / 180 * np.pi)])
         # Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
-        Y[:, 6] = Y[:, 6] / 180 # * np.pi
+        Y[:, 6] = Y[:, 6] #/ 180 # * np.pi
         Y = Y[:, 2:8]
         mean_y = torch.mean(Y, axis=0)
         std_y = torch.std(Y, axis=0)
