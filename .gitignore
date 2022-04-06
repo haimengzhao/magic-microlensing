@@ -20,6 +20,7 @@ log/
 
 # pdf docs
 docs/
+*.pdf
 
 # mac
 .DS_Store
