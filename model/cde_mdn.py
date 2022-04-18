@@ -44,12 +44,13 @@ class CDE_MDN(nn.Module):
     '''
     A Neural CDE Mixture Density Network.
     '''
-    def __init__(self, input_dim, latent_dim, output_dim, n_gaussian=12):
+    def __init__(self, input_dim, latent_dim, output_dim, n_gaussian=12, dataparallel=False):
         super(CDE_MDN, self).__init__()
         self.input_dim = input_dim
         self.latent_dim = latent_dim
         self.output_dim = output_dim
         self.n_gaussian = n_gaussian
+        self.dataparallel = dataparallel
 
         self.cde_func = CDEFunc(input_dim, latent_dim)
         self.initial = nn.Sequential(
@@ -81,6 +82,9 @@ class CDE_MDN(nn.Module):
         z_T = z_T[:, -1]
         z_T = self.readout(z_T)
         pi, normal = self.mdn(z_T)
+
+        if self.dataparallel:
+            return pi.probs, normal.loc, normal.scale
         
         return pi, normal
     

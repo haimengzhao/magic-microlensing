@@ -19,23 +19,29 @@ import torchcde
 
 from tensorboardX import SummaryWriter
 
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4, 5, 6, 7"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+gpu_ids = [0, 1, 2, 3]
+n_gpus = len(gpu_ids)
+
 parser = argparse.ArgumentParser('CDE-MDN')
 parser.add_argument('--niters', type=int, default=1000)
 parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
-parser.add_argument('-b', '--batch-size', type=int, default=128)
-parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-0.h5', help="Path for dataset")
+parser.add_argument('-b', '--batch-size', type=int, default=128 * n_gpus)
+parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-fixrho-0.h5', help="Path for dataset")
+# parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-0.h5', help="Path for dataset")
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-8dof-located-logsig.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/cde_mdn/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
 parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
-
+parser.add_argument('-ng', '--ngaussians', type=int, default=16, help="Number of Gaussians in mixture density network")
 parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the latent state")
 
 args = parser.parse_args()
 
-device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -54,8 +60,8 @@ if __name__ == '__main__':
         experimentID = int(SystemRandom().random() * 100000)
     print(f'ExperimentID: {experimentID}')
     ckpt_path = os.path.join(args.save, "experiment_" + str(experimentID) + '.ckpt')
-    ckpt_path_load = os.path.join(args.save, "experiment_" + '3' + '.ckpt')
-    # ckpt_path_load = ckpt_path
+    # ckpt_path_load = os.path.join(args.save, "experiment_" + '21750' + '.ckpt')
+    ckpt_path_load = ckpt_path
     
     input_command = sys.argv
     ind = [i for i in range(len(input_command)) if input_command[i] == "--load"]
@@ -82,15 +88,15 @@ if __name__ == '__main__':
     # X_even = X_even[nanind]
     # X_rand = X_rand[nanind]
 
-    # n_chunks = 25
-    # gap_len = int(500 / n_chunks)
-    # gap_left = torch.randint(0, X.shape[1]-gap_len, (len(X),))
-    # X_gap = torch.zeros((X.shape[0], X.shape[1]-gap_len, X.shape[2]))
-    # for i in range(len(X)):
-    #     left, gap, right = torch.split(X[i], [gap_left[i], gap_len, X.shape[1]-gap_left[i]-gap_len], dim=0)
-    #     lc = torch.vstack([left, right])
-    #     X_gap[i] = lc
-    # X = X_gap
+    n_chunks = 25
+    gap_len = int(500 / n_chunks)
+    gap_left = torch.randint(0, X.shape[1]-gap_len, (len(X),))
+    X_gap = torch.zeros((X.shape[0], X.shape[1]-gap_len, X.shape[2]))
+    for i in range(len(X)):
+        left, gap, right = torch.split(X[i], [gap_left[i], gap_len, X.shape[1]-gap_left[i]-gap_len], dim=0)
+        lc = torch.vstack([left, right])
+        X_gap[i] = lc
+    X = X_gap
 
     test_size = 1024
     train_size = len(Y) - test_size
@@ -105,8 +111,8 @@ if __name__ == '__main__':
     # Y[:, 7] = torch.sin(Y[:, 6] / 180 * np.pi)
     # Y = torch.hstack([Y, torch.sin(Y[:, [6]] / 180 * np.pi)])
     # Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
-    Y[:, 6] = Y[:, 6] #/ 180 # * np.pi
-    Y = Y[:, 2:8]
+    Y[:, 6] = Y[:, 6] / 180 # * np.pi
+    Y = Y[:, 2:]
     mean_y = torch.mean(Y, axis=0)
     std_y = torch.std(Y, axis=0)
     # std_mask = (std_y==0)
@@ -170,7 +176,12 @@ if __name__ == '__main__':
     gc.collect()
     ##################################################################
     # Create the model
-    model = CDE_MDN(input_dim, latent_dim, output_dim, 32).to(device)
+    if n_gpus > 1:
+        model = CDE_MDN(input_dim, latent_dim, output_dim, args.ngaussians, dataparallel=True)
+        model = nn.DataParallel(model, device_ids = gpu_ids)
+    else:
+        model = CDE_MDN(input_dim, latent_dim, output_dim, args.ngaussians)
+    model = model.to(device)
     ##################################################################
     # Load checkpoint and evaluate the model
     if args.load is not None:
@@ -214,7 +225,7 @@ if __name__ == '__main__':
     num_batches = len(train_dataloader)
 
     for epoch in range(args.resume, args.resume + args.niters):
-        utils.update_learning_rate(optimizer, decay_rate = 0.99, lowest = args.lr / 100)
+        utils.update_learning_rate(optimizer, decay_rate = 0.9, lowest = args.lr / 100)
         lr = optimizer.state_dict()['param_groups'][0]['lr']
         print(f'Epoch {epoch}, Learning Rate {lr}')
         writer.add_scalar('learning_rate', lr, epoch)
@@ -236,12 +247,19 @@ if __name__ == '__main__':
 
             optimizer.zero_grad()
 
-            pi, normal = model(batch_coeffs)
-            pred_y = model.sample(pi, normal)
+            if n_gpus > 1:
+                probs, locs, scales = model(batch_coeffs)
+                pi = torch.distributions.OneHotCategorical(probs=probs)
+                normal = torch.distributions.Normal(locs, scales)
+                loss = model.module.mdn_loss(pi, normal, batch_y)
+                pred_y = model.module.sample(pi, normal)
+            else:
+                pi, normal = model(batch_coeffs)
+                loss = model.mdn_loss(pi, normal, batch_y)
+                pred_y = model.sample(pi, normal)
 
             mse = torch.mean((batch_y - pred_y)**2, dim=0).detach().cpu()
             
-            loss = model.mdn_loss(pi, normal, batch_y)
             loss.backward()
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=20)
@@ -257,12 +275,12 @@ if __name__ == '__main__':
 
             print(f'batch {i}/{num_batches}, loss {loss.item()}, mse {mse}')
             writer.add_scalar('loss/batch_loss', loss.item(), (i + epoch * num_batches))
-            writer.add_scalar('mse_batch/batch_mse_log10q', mse[2], (i + epoch * num_batches))
-            writer.add_scalar('mse_batch/batch_mse_log10s', mse[3], (i + epoch * num_batches))
-            writer.add_scalar('mse_batch/batch_mse_u0', mse[0], (i + epoch * num_batches))
-            writer.add_scalar('mse_batch/batch_mse_rho', mse[1], (i + epoch * num_batches))
-            writer.add_scalar('mse_batch/batch_mse_a', mse[4], (i + epoch * num_batches))
-            writer.add_scalar('mse_batch/batch_mse_log10fs', mse[5], (i + epoch * num_batches))
+            # writer.add_scalar('mse_batch/batch_mse_log10q', mse[2], (i + epoch * num_batches))
+            # writer.add_scalar('mse_batch/batch_mse_log10s', mse[3], (i + epoch * num_batches))
+            # writer.add_scalar('mse_batch/batch_mse_u0', mse[0], (i + epoch * num_batches))
+            # writer.add_scalar('mse_batch/batch_mse_rho', mse[1], (i + epoch * num_batches))
+            # writer.add_scalar('mse_batch/batch_mse_a', mse[4], (i + epoch * num_batches))
+            # writer.add_scalar('mse_batch/batch_mse_log10fs', mse[5], (i + epoch * num_batches))
             # writer.add_scalar('mse_batch/batch_mse_cosa', mse[4], (i + epoch * num_batches))
             # writer.add_scalar('mse_batch/batch_mse_sina', mse[5], (i + epoch * num_batches))
 
@@ -281,9 +299,16 @@ if __name__ == '__main__':
                 print(f'Model saved to {ckpt_path}')
 
                 with torch.no_grad():
-                    pi, normal = model(test_coeffs)
-                    loss = model.mdn_loss(pi, normal, test_Y)
-                    pred_y = model.sample(pi, normal)
+                    if n_gpus > 1:
+                        probs, locs, scales = model(test_coeffs)
+                        pi = torch.distributions.OneHotCategorical(probs=probs)
+                        normal = torch.distributions.Normal(locs, scales)
+                        loss = model.module.mdn_loss(pi, normal, test_Y)
+                        pred_y = model.module.sample(pi, normal)
+                    else:
+                        pi, normal = model(test_coeffs)
+                        loss = model.mdn_loss(pi, normal, test_Y)
+                        pred_y = model.sample(pi, normal)
 
                     mse = torch.mean((test_Y - pred_y)**2, dim=0).detach().cpu()
 
@@ -296,12 +321,12 @@ if __name__ == '__main__':
                     message = f'Epoch {(i + epoch * num_batches)/num_batches}, Test Loss {loss.item()}, mse {mse}'
                     writer.add_scalar('loss/test_loss', loss.item(), (i + epoch * num_batches)/20)
                     # writer.add_scalar('loss/test_loss_rand', loss_rand.item(), (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse/test_mse_log10q', mse[2], (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse/test_mse_log10s', mse[3], (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse/test_mse_u0', mse[0], (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse/test_mse_rho', mse[1], (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse/test_mse_a', mse[4], (i + epoch * num_batches)/20)
-                    writer.add_scalar('mse/test_mse_log10fs', mse[5], (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse/test_mse_log10q', mse[2], (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse/test_mse_log10s', mse[3], (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse/test_mse_u0', mse[0], (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse/test_mse_rho', mse[1], (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse/test_mse_a', mse[4], (i + epoch * num_batches)/20)
+                    # writer.add_scalar('mse/test_mse_log10fs', mse[5], (i + epoch * num_batches)/20)
                     # writer.add_scalar('mse/test_mse_cosa', mse[4], (i + epoch * num_batches)/20)
                     # writer.add_scalar('mse/test_mse_sina', mse[5], (i + epoch * num_batches)/20)
 
@@ -336,23 +361,23 @@ if __name__ == '__main__':
         Y = Y[nanind]
         X = X[nanind]
 
-        # n_chunks = 25
-        # gap_len = int(500 / n_chunks)
-        # gap_left = torch.randint(0, X.shape[1]-gap_len, (len(X),))
-        # X_gap = torch.zeros((X.shape[0], X.shape[1]-gap_len, X.shape[2]))
-        # for i in range(len(X)):
-        #     left, gap, right = torch.split(X[i], [gap_left[i], gap_len, X.shape[1]-gap_left[i]-gap_len], dim=0)
-        #     lc = torch.vstack([left, right])
-        #     X_gap[i] = lc
-        # X = X_gap
+        n_chunks = 25
+        gap_len = int(500 / n_chunks)
+        gap_left = torch.randint(0, X.shape[1]-gap_len, (len(X),))
+        X_gap = torch.zeros((X.shape[0], X.shape[1]-gap_len, X.shape[2]))
+        for i in range(len(X)):
+            left, gap, right = torch.split(X[i], [gap_left[i], gap_len, X.shape[1]-gap_left[i]-gap_len], dim=0)
+            lc = torch.vstack([left, right])
+            X_gap[i] = lc
+        X = X_gap
 
         # nanind = torch.where(Y[:, 4]>1e-4)[0]
         # Y = Y[nanind]
         # X_even = X_even[nanind]
         # X_rand = X_rand[nanind]
 
-        test_size = 1024
-        train_size = len(Y) - test_size
+        # test_size = 1024
+        train_size = len(Y)
         # train_size = 128
         print(f'Training Set Size: {train_size}')
 
@@ -364,8 +389,8 @@ if __name__ == '__main__':
         # Y[:, 7] = torch.sin(Y[:, 6] / 180 * np.pi)
         # Y = torch.hstack([Y, torch.sin(Y[:, [6]] / 180 * np.pi)])
         # Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
-        Y[:, 6] = Y[:, 6] #/ 180 # * np.pi
-        Y = Y[:, 2:8]
+        Y[:, 6] = Y[:, 6] / 180 # * np.pi
+        Y = Y[:, 2:]
         mean_y = torch.mean(Y, axis=0)
         std_y = torch.std(Y, axis=0)
         # std_mask = (std_y==0)
