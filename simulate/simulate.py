@@ -133,7 +133,8 @@ def generate_random_parameter_set(u0_max=1, max_iter=100):
     # t_0 = random.uniform(0 + 3 * t_E, 72 - 3 * t_E)
     f_s = 10.**random.uniform(-1, 0)
 
-    rho = 10.**random.uniform(-4, -2) # log-flat between 1e-4 and 1e-2
+    # rho = 10.**random.uniform(-4, -2) # log-flat between 1e-4 and 1e-2
+    rho = 10.**(-3)
     q = 10.**random.uniform(-4, 0) # including both planetary & binary events
     s = 10.**random.uniform(np.log10(0.3), np.log10(3))
     alpha = random.uniform(0, 360) # 0-360 degrees
@@ -258,7 +259,7 @@ def simulate_batch(batch_size, relative_uncertainty, time_settings_random, time_
             opt['Y'] = Y
     
     time_end = time.time()
-    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/KMT-{5+b}.h5, size {batch_size}, use time: {time_end - time_start}s\n')
+    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/KMT-{b}-fixrho.h5, size {batch_size}, use time: {time_end - time_start}s\n')
     log.close()
 
         
