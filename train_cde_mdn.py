@@ -19,11 +19,16 @@ import torchcde
 
 from tensorboardX import SummaryWriter
 
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "4, 5, 6, 7"
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# gpu_ids = [0, 1, 2, 3]
+# n_gpus = len(gpu_ids)
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4, 5, 6, 7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-gpu_ids = [0, 1, 2, 3]
-n_gpus = len(gpu_ids)
+gpu_ids=[0]
+n_gpus = 1
 
 parser = argparse.ArgumentParser('CDE-MDN')
 parser.add_argument('--niters', type=int, default=1000)
@@ -37,7 +42,7 @@ parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/cde_md
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
 parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
-parser.add_argument('-ng', '--ngaussians', type=int, default=16, help="Number of Gaussians in mixture density network")
+parser.add_argument('-ng', '--ngaussians', type=int, default=12, help="Number of Gaussians in mixture density network")
 parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the latent state")
 
 args = parser.parse_args()
@@ -112,7 +117,7 @@ if __name__ == '__main__':
     # Y = torch.hstack([Y, torch.sin(Y[:, [6]] / 180 * np.pi)])
     # Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
     Y[:, 6] = Y[:, 6] / 180 # * np.pi
-    Y = Y[:, 2:]
+    Y = Y[:, [2, 4, 5, 6, 7]]
     mean_y = torch.mean(Y, axis=0)
     std_y = torch.std(Y, axis=0)
     # std_mask = (std_y==0)
@@ -132,6 +137,8 @@ if __name__ == '__main__':
     # X_rand[:, :, 1] = 10**((22-X_rand[:, :, 1])/2.5)/1000
     # X_rand[:, :, 1] = 22 - 2.5*torch.log10(1000*X_rand[:, :, 1])
     # X_rand[:, :, 1] = (X_rand[:, :, 1] - mean_x_even) / std_x_even
+
+    Y = Y[:, :-1]
 
     # time rescale
     # X_even[:, :, 0] = X_even[:, :, 0] / 200
@@ -390,7 +397,7 @@ if __name__ == '__main__':
         # Y = torch.hstack([Y, torch.sin(Y[:, [6]] / 180 * np.pi)])
         # Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
         Y[:, 6] = Y[:, 6] / 180 # * np.pi
-        Y = Y[:, 2:]
+        Y = Y[:, [2, 4, 5, 6, 7]]
         mean_y = torch.mean(Y, axis=0)
         std_y = torch.std(Y, axis=0)
         # std_mask = (std_y==0)
@@ -410,6 +417,8 @@ if __name__ == '__main__':
         # X_rand[:, :, 1] = 10**((22-X_rand[:, :, 1])/2.5)/1000
         # X_rand[:, :, 1] = 22 - 2.5*torch.log10(1000*X_rand[:, :, 1])
         # X_rand[:, :, 1] = (X_rand[:, :, 1] - mean_x_even) / std_x_even
+
+        Y = Y[:, :-1]
 
         # time rescale
         # X_even[:, :, 0] = X_even[:, :, 0] / 200
