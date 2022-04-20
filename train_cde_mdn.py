@@ -25,7 +25,7 @@ from tensorboardX import SummaryWriter
 # gpu_ids = [0, 1, 2, 3]
 # n_gpus = len(gpu_ids)
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 gpu_ids=[0]
 n_gpus = 1

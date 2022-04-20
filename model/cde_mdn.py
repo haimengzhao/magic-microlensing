@@ -4,7 +4,7 @@ import torch.nn as nn
 import model.utils as utils
 
 import torchcde
-import model.mdn as mdn
+import model.mdn_full as mdn
 
 class CDEFunc(nn.Module):
     '''
@@ -44,13 +44,14 @@ class CDE_MDN(nn.Module):
     '''
     A Neural CDE Mixture Density Network.
     '''
-    def __init__(self, input_dim, latent_dim, output_dim, n_gaussian=12, dataparallel=False):
+    def __init__(self, input_dim, latent_dim, output_dim, n_gaussian=12, dataparallel=False, full_cov=True):
         super(CDE_MDN, self).__init__()
         self.input_dim = input_dim
         self.latent_dim = latent_dim
         self.output_dim = output_dim
         self.n_gaussian = n_gaussian
         self.dataparallel = dataparallel
+        self.full_cov = full_cov
 
         self.cde_func = CDEFunc(input_dim, latent_dim)
         self.initial = nn.Sequential(
@@ -63,7 +64,7 @@ class CDE_MDN(nn.Module):
             *[utils.ResBlock(1024, 1024, nonlinear=nn.ReLU, layernorm=False) for i in range(3)],
             nn.Linear(1024, 1024)
         )
-        self.mdn = mdn.MixtureDensityNetwork(1024, output_dim, self.n_gaussian)
+        self.mdn = mdn.MixtureDensityNetwork(1024, output_dim, self.n_gaussian, full_cov=full_cov)
         # utils.init_network_weights(self.cde_func, nn.init.orthogonal_)
         
     def forward(self, coeffs):
@@ -90,7 +91,7 @@ class CDE_MDN(nn.Module):
     
     def mdn_loss(self, pi, normal, y):
         loglik = normal.log_prob(y.unsqueeze(1).expand_as(normal.loc))
-        loglik = torch.sum(loglik, dim=2)
+        # loglik = torch.sum(loglik, dim=2)
         loss = -torch.logsumexp(torch.log(pi.probs) + loglik, dim=1)
         return loss.mean()
 
