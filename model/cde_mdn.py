@@ -4,7 +4,8 @@ import torch.nn as nn
 import model.utils as utils
 
 import torchcde
-import model.mdn_full as mdn
+import model.mdn as mdn
+# import model.mdn_full as mdn
 
 class CDEFunc(nn.Module):
     '''
