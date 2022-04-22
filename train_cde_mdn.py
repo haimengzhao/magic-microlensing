@@ -25,14 +25,14 @@ from tensorboardX import SummaryWriter
 # gpu_ids = [0, 1, 2, 3]
 # n_gpus = len(gpu_ids)
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "4"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 gpu_ids=[0]
 n_gpus = 1
 
 parser = argparse.ArgumentParser('CDE-MDN')
-parser.add_argument('--niters', type=int, default=1000)
-parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
+parser.add_argument('--niters', type=int, default=50)
+parser.add_argument('--lr',  type=float, default=5e-6, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128 * n_gpus)
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-fixrho-0.h5', help="Path for dataset")
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-0.h5', help="Path for dataset")
@@ -138,7 +138,7 @@ if __name__ == '__main__':
     # X_rand[:, :, 1] = 22 - 2.5*torch.log10(1000*X_rand[:, :, 1])
     # X_rand[:, :, 1] = (X_rand[:, :, 1] - mean_x_even) / std_x_even
 
-    Y = Y[:, :-1]
+    # Y = Y[:, :-1]
 
     # time rescale
     # X_even[:, :, 0] = X_even[:, :, 0] / 200
@@ -418,7 +418,7 @@ if __name__ == '__main__':
         # X_rand[:, :, 1] = 22 - 2.5*torch.log10(1000*X_rand[:, :, 1])
         # X_rand[:, :, 1] = (X_rand[:, :, 1] - mean_x_even) / std_x_even
 
-        Y = Y[:, :-1]
+        # Y = Y[:, :-1]
 
         # time rescale
         # X_even[:, :, 0] = X_even[:, :, 0] / 200

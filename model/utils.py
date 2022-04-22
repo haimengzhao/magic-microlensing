@@ -4,6 +4,274 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
+from tqdm.notebook import tqdm
+from scipy.signal import find_peaks
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import AnchoredText
+import MulensModel as mm
+
+def getfsfb(times, iflux, iferr, t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, **kwargs):
+    ''' iflux: data flux values;
+    iferr: data flux uncertainties;
+    iamp: theoretical magnifications. '''
+    parameters = {
+            't_0': t_0,
+            't_E': t_E,
+            'u_0': u_0,
+            'rho': 10**lgrho, 
+            'q': 10**lgq, 
+            's': 10**lgs, 
+            'alpha': alpha_180*180,
+        }
+    modelmm = mm.Model(parameters, coords=None)
+    modelmm.set_magnification_methods([parameters['t_0']-2*parameters['t_E'], 'VBBL', parameters['t_0']+2*parameters['t_E']])
+    iamp = modelmm.get_magnification(times)
+    sig2 = iferr**2
+    wght = iflux/sig2
+    d = np.ones(2)
+    d[0] = np.sum(wght*iamp)
+    d[1] = np.sum(wght)
+    b = np.zeros((2,2))
+    b[0,0] = np.sum(iamp**2/sig2)
+    b[0,1] = np.sum(iamp/sig2)
+    b[1,0] = b[0,1]
+    b[1,1] = np.sum(1./sig2)
+    c = np.linalg.inv(b)
+    fs = np.sum(c[0]*d)
+    fb = np.sum(c[1]*d)
+    fserr = np.sqrt(c[0,0])
+    fberr = np.sqrt(c[1,1])
+    fmod = fs*iamp+fb
+    chi2 = np.sum((iflux-fmod)**2/sig2)
+    return chi2,fs,fb,fserr,fberr
+
+def infer_lgfs(X, pred, relative_uncertainty=0.03):
+    lgfs = np.zeros((pred.shape[0], 1))
+    for i in tqdm(range(pred.shape[0])):
+        times = X[i, :, 0]
+        iflux = 10 ** (X[i, :, 1] / 5 / (-2.5))
+        iferr = relative_uncertainty * iflux
+        chi2, fs, fb, fserr, fberr = getfsfb(times, iflux, iferr, 0, 1, pred[i, 0], -3, pred[i, 1], pred[i, 2], pred[i, 3])
+        lgfs[i, 0] = np.log10(fs / (fs + fb))
+    pred = np.hstack([pred, lgfs])
+    return pred
+
+
+def inference(model, total_size, batch_size, coeffs, device='cpu', **kwargs):
+    num = total_size
+    batchsize = batch_size
+    n_gaussian = model.n_gaussian
+    output_dim = model.output_dim
+    pis = torch.zeros((num, n_gaussian))
+    locs = torch.zeros((num, n_gaussian, output_dim))
+    scales = torch.zeros((num, n_gaussian, output_dim))
+    model.eval()
+    with torch.no_grad():
+        for i in tqdm(range(int(np.ceil(num / batchsize)))):
+            batch = coeffs[i*batchsize:min(i*batchsize+batchsize, num)].float().to(device)
+            pi, normal = model(batch)
+            pis[i*batchsize:min(i*batchsize+batchsize, num)] = pi.probs.detach().cpu()
+            locs[i*batchsize:min(i*batchsize+batchsize, num)] = normal.loc.detach().cpu()
+            scales[i*batchsize:min(i*batchsize+batchsize, num)] = normal.scale.detach().cpu()
+    return pis, locs, scales
+
+def get_loglik(pi, loc, scale, x, margin_dim, exp=False):
+    shape = x.shape
+    loc = loc[..., margin_dim]
+    scale = scale[..., margin_dim]
+    normal = torch.distributions.Normal(loc, scale)
+    x = x.reshape(-1, loc.shape[0], 1).tile(1, loc.shape[-1])
+    loglik = normal.log_prob(x).reshape(*shape[:-1], -1)
+    loglik = torch.logsumexp(torch.log(pi) + loglik, dim=-1)
+    if exp:
+        return torch.exp(loglik)
+    return loglik
+
+def get_peak_pred(pis, locs, scales, Y, n_step=1000, verbose=False):
+    num = len(pis); output_dim = locs.shape[-1]
+    pred_global = torch.zeros((num, output_dim))
+    pred_global_loglik = torch.zeros((num, output_dim))
+    pred_close = torch.zeros((num, output_dim))
+    pred_close_loglik = torch.zeros((num, output_dim))
+    grid = [torch.linspace(0, 1, n_step),
+        torch.linspace(-4, 0, n_step),
+        torch.linspace(-0.6, 0.6, n_step),
+        torch.linspace(0, 2, n_step),
+        torch.linspace(-1, 0, n_step)]
+    for dim in tqdm(range(output_dim)):
+        param_list = grid[dim].reshape(-1, 1, 1).tile(1, num, 1) 
+        loglik = get_loglik(pis, locs, scales, param_list, margin_dim=dim, exp=False).transpose(1, 0)
+        for i in tqdm(range(num)):
+            peaks = find_peaks(loglik[i])[0]
+            if len(peaks) == 0:
+                pred_global[i, dim] = grid[dim][torch.argmax(loglik[i])]
+                pred_close[i, dim] = grid[dim][torch.argmax(loglik[i])]
+                pred_global_loglik[i, dim] = torch.max(loglik[i])
+                pred_close_loglik[i, dim] = torch.max(loglik[i])
+                if verbose:
+                    print('no peak found, use maximum instead')
+                    plt.plot(grid[dim], loglik[i])
+                    plt.vlines(Y[i, dim], 0, 10, color='red')
+                    plt.vlines(grid[dim][torch.argmax(loglik[i])], 0, 10, color='blue')
+                    print(Y[i, dim])
+                    plt.show()
+            else:
+                order = torch.argsort(loglik[i, peaks], descending=True)
+                global_peak = grid[dim][peaks[order[0]]]
+                close_peak = grid[dim][peaks][torch.argmin((grid[dim][peaks] - Y[i, dim])**2)]
+                pred_global[i, dim] = global_peak
+                pred_close[i, dim] = close_peak
+                pred_global_loglik[i, dim] = loglik[i][peaks[order[0]]]
+                pred_close_loglik[i, dim] = loglik[i][peaks][torch.argmin((grid[dim][peaks] - Y[i, dim])**2)]
+    return pred_global, pred_global_loglik, pred_close, pred_close_loglik
+
+def plot_params(num, Y, pred_global, pred_global_loglik, pred_close, pred_close_loglik, 
+                title=None, figsize=(12, 8), labelsize=14, alpha=0.1, save=None,
+                example_groundtruth=np.ones(5)*np.inf, example_pred=np.ones(5)*np.inf):
+    rmse = []
+
+    fig = plt.figure(figsize=figsize)
+    axq = plt.subplot2grid(shape=(2, 3), loc=(0, 0), rowspan=1, colspan=1)
+    axq.axis('square')
+    axq.set_xlim(-3, 0)
+    axq.set_ylim(-3, 0)
+    axq.set_xlabel(r'actual $\lg q$', fontsize=labelsize)
+    axq.set_ylabel(r'predicted $\lg q$', fontsize=labelsize)
+    axq.scatter(Y[:num, 1], pred_global.numpy()[:num, 1], s=3, cmap='Blues', label='global', alpha=alpha, rasterized=True)
+    axq.scatter(Y[:num, 1], pred_close.numpy()[:num, 1], s=3, cmap='Oranges', label='close', alpha=alpha, rasterized=True)
+    axq.scatter(example_groundtruth[1], example_pred[1], s=100, color='black', marker='*')
+    axq.plot(np.linspace(-3, 0), np.linspace(-3, 0), color='b', linestyle='dashed')
+    # axq.legend(loc='lower right')
+    print('mse of log10q global: ', torch.mean((Y[:num, 1] -  pred_global.numpy()[:num, 1])**2).detach().cpu().item())
+    print('mse of log10q close: ', torch.mean((Y[:num, 1] -  pred_close.numpy()[:num, 1])**2).detach().cpu().item())
+    constraint_ind = pred_global_loglik[:num, 1]>np.log(2*1/3)
+    print('constraint', torch.sum(constraint_ind).item()/num)
+    print('correct', torch.sum(pred_global[:num, 1][constraint_ind]==pred_close[:num, 1][constraint_ind]).item()/torch.sum(constraint_ind).item())
+    at = AnchoredText(
+        "RMSE=%.4f" % (np.sqrt(torch.mean((Y[:num, 1] -  pred_close.numpy()[:num, 1])**2).detach().cpu().item())), prop=dict(size=12), frameon=False, loc='upper left')
+    axq.add_artist(at)
+    rmse.append(np.sqrt(torch.mean((Y[:num, 2] -  pred_close.numpy()[:num, 2])**2).detach().cpu().item()))
+    
+    axs = plt.subplot2grid(shape=(2, 3), loc=(0, 1), rowspan=1, colspan=1)
+    axs.axis('square')
+    axs.set_xlim(np.log10(0.3), np.log10(3))
+    axs.set_ylim(np.log10(0.3), np.log10(3))
+    axs.set_xlabel(r'actual $\lg s$', fontsize=labelsize)
+    axs.set_ylabel(r'predicted $\lg s$', fontsize=labelsize)
+    axs.scatter(Y[:num, 2], pred_global.numpy()[:num, 2], s=3, cmap='Blues', label='global', alpha=alpha, rasterized=True)
+    axs.scatter(Y[:num, 2], pred_close.numpy()[:num, 2], s=3, cmap='Oranges', label='close', alpha=alpha, rasterized=True)
+    axs.scatter(example_groundtruth[2], example_pred[2], s=100, color='black', marker='*')
+    axs.plot(np.linspace(-0.6, 0.6), np.linspace(-0.6, 0.6), color='b', linestyle='dashed')
+    # axs.legend(loc='lower right')
+    print('mse of log10s global: ', torch.mean((Y[:num, 2] -  pred_global.numpy()[:num, 2])**2).detach().cpu().item())
+    print('mse of log10s close: ', torch.mean((Y[:num, 2] -  pred_close.numpy()[:num, 2])**2).detach().cpu().item())
+    constraint_ind = pred_global_loglik[:num, 2]>np.log(2*1/2/np.log10(3))
+    print('constraint', torch.sum(constraint_ind).item()/num)
+    print('correct', torch.sum(pred_global[:num, 2][constraint_ind]==pred_close[:num, 2][constraint_ind]).item()/torch.sum(constraint_ind).item())
+    at = AnchoredText(
+        "RMSE=%.4f" % (np.sqrt(torch.mean((Y[:num, 2] -  pred_close.numpy()[:num, 2])**2).detach().cpu().item())), prop=dict(size=12), frameon=False, loc='upper left')
+    axs.add_artist(at)
+    rmse.append(np.sqrt(torch.mean((Y[:num, 2] -  pred_close.numpy()[:num, 2])**2).detach().cpu().item()))
+
+    axu = plt.subplot2grid(shape=(2, 3), loc=(0, 2), rowspan=1, colspan=1)
+    axu.axis('square')
+    axu.set_xlim(0, 1)
+    axu.set_ylim(0, 1)
+    axu.set_xlabel(r'actual $u_0$', fontsize=labelsize)
+    axu.set_ylabel(r'predicted $u_0$', fontsize=labelsize)
+    axu.scatter(Y[:num, 0], pred_global.numpy()[:num, 0], s=3, cmap='Blues', label='global', alpha=alpha, rasterized=True)
+    axu.scatter(Y[:num, 0], pred_close.numpy()[:num, 0], s=3, cmap='Oranges', label='close', alpha=alpha, rasterized=True)
+    axu.scatter(example_groundtruth[0], example_pred[0], s=100, color='black', marker='*')
+    axu.plot(np.linspace(0, 1), np.linspace(0, 1), color='b', linestyle='dashed')
+    # axu.legend(loc='lower right')
+    print('mse of u0: ', torch.mean((Y[:num, 0] -  pred_global.numpy()[:num, 0])**2).detach().cpu().item())
+    print('mse of u0: ', torch.mean((Y[:num, 0] -  pred_close.numpy()[:num, 0])**2).detach().cpu().item())
+    constraint_ind = pred_global_loglik[:num, 0]>np.log(2*1/1)
+    print('constraint', torch.sum(constraint_ind).item()/num)
+    print('correct', torch.sum(pred_global[:num, 0][constraint_ind]==pred_close[:num, 0][constraint_ind]).item()/torch.sum(constraint_ind).item())
+    at = AnchoredText(
+        "RMSE=%.4f" % (np.sqrt(torch.mean((Y[:num, 0] -  pred_close.numpy()[:num, 0])**2).detach().cpu().item())), prop=dict(size=12), frameon=False, loc='upper left')
+    axu.add_artist(at)
+    rmse.append(np.sqrt(torch.mean((Y[:num, 0] -  pred_close.numpy()[:num, 0])**2).detach().cpu().item()))
+
+    axa = plt.subplot2grid(shape=(2, 3), loc=(1, 0), rowspan=1, colspan=1)
+    axa.axis('square')
+    axa.set_xlim(0, 360)
+    axa.set_ylim(0, 360)
+    axa.set_xlabel(r'actual $\alpha$', fontsize=labelsize)
+    axa.set_ylabel(r'predicted $\alpha$', fontsize=labelsize)
+    axa.scatter(Y[:num, 3]*180, pred_global.numpy()[:num, 3]*180, s=3, cmap='Blues', label='global', alpha=alpha, rasterized=True)
+    axa.scatter(Y[:num, 3]*180, pred_close.numpy()[:num, 3]*180, s=3, cmap='Oranges', label='close', alpha=alpha, rasterized=True)
+    axa.scatter(example_groundtruth[3]*180, example_pred[3]*180, s=100, color='black', marker='*')
+    axa.plot(np.linspace(0, 360), np.linspace(0, 360), color='b', linestyle='dashed')
+    # axa.legend(loc='lower right')
+    print('mse of alpha global: ', torch.mean((Y[:num, 3]*180 -  pred_global.numpy()[:num, 3]*180)**2).detach().cpu().item())
+    print('mse of alpha close: ', torch.mean((Y[:num, 3]*180 -  pred_close.numpy()[:num, 3]*180)**2).detach().cpu().item())
+    constraint_ind = pred_global_loglik[:num, 3]>np.log(2*1/2)
+    print('constraint', torch.sum(constraint_ind).item()/num)
+    print('correct', torch.sum(pred_global[:num, 3][constraint_ind]==pred_close[:num, 3][constraint_ind]).item()/torch.sum(constraint_ind).item())
+    at = AnchoredText(
+        "RMSE=%.3f" % np.sqrt((torch.mean((Y[:num, 3] -  pred_close.numpy()[:num, 3])**2).detach().cpu().item())*180), prop=dict(size=12), frameon=False, loc='upper left')
+    axa.add_artist(at)
+    rmse.append(np.sqrt(torch.mean((Y[:num, 3] -  pred_close.numpy()[:num, 3])**2).detach().cpu().item()))
+
+    axf = plt.subplot2grid(shape=(2, 3), loc=(1, 1), rowspan=1, colspan=1)
+    axf.axis('square')
+    axf.set_xlim(-1, 0)
+    axf.set_ylim(-1, 0)
+    axf.set_xlabel(r'actual $\lg f_s$', fontsize=labelsize)
+    axf.set_ylabel(r'predicted $\lg f_s$', fontsize=labelsize)
+    axf.scatter(Y[:num, 4], pred_global.numpy()[:num, 4], s=3, cmap='Blues', label='global', alpha=alpha, rasterized=True)
+    axf.scatter(Y[:num, 4], pred_close.numpy()[:num, 4], s=3, cmap='Oranges', label='close', alpha=alpha, rasterized=True)
+    axf.scatter(example_groundtruth[4], example_pred[4], s=100, color='black', marker='*')
+    axf.plot(np.linspace(-1, 0), np.linspace(-1, 0), color='b', linestyle='dashed')
+    # axf.legend(loc='lower right')
+    print('mse of log10fs global: ', torch.mean((Y[:num, 4] -  pred_global.numpy()[:num, 4])**2).detach().cpu().item())
+    print('mse of log10fs close: ', torch.mean((Y[:num, 4] -  pred_close.numpy()[:num, 4])**2).detach().cpu().item())
+    # constraint_ind = pred_global_loglik[:num, 4]>np.log(2*1/1)
+    # print('constraint', torch.sum(constraint_ind).item()/num)
+    # print('correct', torch.sum(pred_global[:num, 4][constraint_ind]==pred_close[:num, 4][constraint_ind]).item()/torch.sum(constraint_ind).item())
+    at = AnchoredText(
+        "RMSE=%.4f" % np.sqrt((torch.mean((Y[:num, 4] -  pred_close.numpy()[:num, 4])**2).detach().cpu().item())), prop=dict(size=12), frameon=False, loc='upper left')
+    axf.add_artist(at)
+    rmse.append(np.sqrt(torch.mean((Y[:num, 4] -  pred_close.numpy()[:num, 4])**2).detach().cpu().item()))
+    
+    plt.tight_layout()
+        
+    if title != None:
+        fig.suptitle(title)
+
+    if save != None:
+        plt.savefig(save)
+    
+    plt.show()
+    return rmse
+    
+
+def simulate_lc(t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, lgfs, relative_uncertainty=0, n_points=1000, orig=False):
+    fs = 10**lgfs
+    parameters = {
+            't_0': t_0,
+            't_E': t_E,
+            'u_0': u_0,
+            'rho': 10**lgrho, 
+            'q': 10**lgq, 
+            's': 10**lgs, 
+            'alpha': alpha_180*180,
+        }
+    modelmm = mm.Model(parameters, coords=None)
+    times = modelmm.set_times(t_start=parameters['t_0']-2*parameters['t_E'], t_stop=parameters['t_0']+2*parameters['t_E'], n_epochs=n_points)
+    modelmm.set_magnification_methods([parameters['t_0']-2*parameters['t_E'], 'VBBL', parameters['t_0']+2*parameters['t_E']])
+    magnification = modelmm.get_magnification(times)
+    flux = 1000 * (magnification + (1-fs)/fs)
+    flux *= 1 + relative_uncertainty * np.random.randn(len(flux))
+    if orig:
+        mag = (22 - 2.5 * np.log10(flux) - 14.5 - 2.5*np.log10(fs))
+    else:
+        mag = (22 - 2.5 * np.log10(flux) - 14.5 - 2.5*np.log10(fs)) / 0.2
+    lc = np.stack([times, mag], axis=-1)
+    return lc
+
 
 def tensor_linspace(start, end, steps=10):
     """
