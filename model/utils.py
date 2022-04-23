@@ -126,12 +126,12 @@ def get_peak_pred(pis, locs, scales, Y, n_step=1000, verbose=False):
     return pred_global, pred_global_loglik, pred_close, pred_close_loglik
 
 def plot_params(num, Y, pred_global, pred_global_loglik, pred_close, pred_close_loglik, 
-                title=None, figsize=(12, 8), labelsize=14, alpha=0.1, save=None,
+                title=None, figsize=(16, 8), labelsize=14, alpha=0.1, save=None,
                 example_groundtruth=np.ones(5)*np.inf, example_pred=np.ones(5)*np.inf):
     rmse = []
 
     fig = plt.figure(figsize=figsize)
-    axq = plt.subplot2grid(shape=(2, 3), loc=(0, 0), rowspan=1, colspan=1)
+    axq = plt.subplot2grid(shape=(2, 4), loc=(0, 0), rowspan=1, colspan=1)
     axq.axis('square')
     axq.set_xlim(-3, 0)
     axq.set_ylim(-3, 0)
@@ -152,7 +152,7 @@ def plot_params(num, Y, pred_global, pred_global_loglik, pred_close, pred_close_
     axq.add_artist(at)
     rmse.append(np.sqrt(torch.mean((Y[:num, 2] -  pred_close.numpy()[:num, 2])**2).detach().cpu().item()))
     
-    axs = plt.subplot2grid(shape=(2, 3), loc=(0, 1), rowspan=1, colspan=1)
+    axs = plt.subplot2grid(shape=(2, 4), loc=(0, 1), rowspan=1, colspan=1)
     axs.axis('square')
     axs.set_xlim(np.log10(0.3), np.log10(3))
     axs.set_ylim(np.log10(0.3), np.log10(3))
@@ -173,7 +173,7 @@ def plot_params(num, Y, pred_global, pred_global_loglik, pred_close, pred_close_
     axs.add_artist(at)
     rmse.append(np.sqrt(torch.mean((Y[:num, 2] -  pred_close.numpy()[:num, 2])**2).detach().cpu().item()))
 
-    axu = plt.subplot2grid(shape=(2, 3), loc=(0, 2), rowspan=1, colspan=1)
+    axu = plt.subplot2grid(shape=(2, 4), loc=(0, 2), rowspan=1, colspan=1)
     axu.axis('square')
     axu.set_xlim(0, 1)
     axu.set_ylim(0, 1)
@@ -194,12 +194,12 @@ def plot_params(num, Y, pred_global, pred_global_loglik, pred_close, pred_close_
     axu.add_artist(at)
     rmse.append(np.sqrt(torch.mean((Y[:num, 0] -  pred_close.numpy()[:num, 0])**2).detach().cpu().item()))
 
-    axa = plt.subplot2grid(shape=(2, 3), loc=(1, 0), rowspan=1, colspan=1)
+    axa = plt.subplot2grid(shape=(2, 4), loc=(0, 3), rowspan=1, colspan=1)
     axa.axis('square')
     axa.set_xlim(0, 360)
     axa.set_ylim(0, 360)
-    axa.set_xlabel(r'actual $\alpha$', fontsize=labelsize)
-    axa.set_ylabel(r'predicted $\alpha$', fontsize=labelsize)
+    axa.set_xlabel(r'actual $\alpha$ (deg)', fontsize=labelsize)
+    axa.set_ylabel(r'predicted $\alpha$ (deg)', fontsize=labelsize)
     axa.scatter(Y[:num, 3]*180, pred_global.numpy()[:num, 3]*180, s=3, cmap='Blues', label='global', alpha=alpha, rasterized=True)
     axa.scatter(Y[:num, 3]*180, pred_close.numpy()[:num, 3]*180, s=3, cmap='Oranges', label='close', alpha=alpha, rasterized=True)
     axa.scatter(example_groundtruth[3]*180, example_pred[3]*180, s=100, color='black', marker='*')
@@ -215,7 +215,7 @@ def plot_params(num, Y, pred_global, pred_global_loglik, pred_close, pred_close_
     axa.add_artist(at)
     rmse.append(np.sqrt(torch.mean((Y[:num, 3] -  pred_close.numpy()[:num, 3])**2).detach().cpu().item()))
 
-    axf = plt.subplot2grid(shape=(2, 3), loc=(1, 1), rowspan=1, colspan=1)
+    axf = plt.subplot2grid(shape=(2, 4), loc=(1, 0), rowspan=1, colspan=1)
     axf.axis('square')
     axf.set_xlim(-1, 0)
     axf.set_ylim(-1, 0)
