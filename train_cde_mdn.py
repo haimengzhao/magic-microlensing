@@ -32,7 +32,7 @@ n_gpus = 1
 
 parser = argparse.ArgumentParser('CDE-MDN')
 parser.add_argument('--niters', type=int, default=50)
-parser.add_argument('--lr',  type=float, default=5e-6, help="Starting learning rate")
+parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128 * n_gpus)
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-fixrho-0.h5', help="Path for dataset")
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-0.h5', help="Path for dataset")
@@ -43,7 +43,7 @@ parser.add_argument('--load', type=str, default=None, help="ID of the experiment
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
 parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
 parser.add_argument('-ng', '--ngaussians', type=int, default=12, help="Number of Gaussians in mixture density network")
-parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the latent state")
+parser.add_argument('-l', '--latents', type=int, default=64, help="Dim of the latent state")
 
 args = parser.parse_args()
 
@@ -65,7 +65,7 @@ if __name__ == '__main__':
         experimentID = int(SystemRandom().random() * 100000)
     print(f'ExperimentID: {experimentID}')
     ckpt_path = os.path.join(args.save, "experiment_" + str(experimentID) + '.ckpt')
-    # ckpt_path_load = os.path.join(args.save, "experiment_" + '21750' + '.ckpt')
+    # ckpt_path_load = os.path.join(args.save, "experiment_" + '859' + '.ckpt')
     ckpt_path_load = ckpt_path
     
     input_command = sys.argv
