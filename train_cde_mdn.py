@@ -31,7 +31,7 @@ gpu_ids=[0]
 n_gpus = 1
 
 parser = argparse.ArgumentParser('CDE-MDN')
-parser.add_argument('--niters', type=int, default=50)
+parser.add_argument('--niters', type=int, default=100)
 parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128 * n_gpus)
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-fixrho-0.h5', help="Path for dataset")

@@ -57,14 +57,17 @@ def infer_lgfs(X, pred, relative_uncertainty=0.03):
     return pred
 
 
-def inference(model, total_size, batch_size, coeffs, device='cpu', **kwargs):
+def inference(model, total_size, batch_size, coeffs, device='cpu', full_cov=False, **kwargs):
     num = total_size
     batchsize = batch_size
     n_gaussian = model.n_gaussian
     output_dim = model.output_dim
     pis = torch.zeros((num, n_gaussian))
     locs = torch.zeros((num, n_gaussian, output_dim))
-    scales = torch.zeros((num, n_gaussian, output_dim))
+    if full_cov:
+        scales = torch.zeros((num, n_gaussian, output_dim, output_dim))
+    else:
+        scales = torch.zeros((num, n_gaussian, output_dim))
     model.eval()
     with torch.no_grad():
         for i in tqdm(range(int(np.ceil(num / batchsize)))):
@@ -72,13 +75,20 @@ def inference(model, total_size, batch_size, coeffs, device='cpu', **kwargs):
             pi, normal = model(batch)
             pis[i*batchsize:min(i*batchsize+batchsize, num)] = pi.probs.detach().cpu()
             locs[i*batchsize:min(i*batchsize+batchsize, num)] = normal.loc.detach().cpu()
-            scales[i*batchsize:min(i*batchsize+batchsize, num)] = normal.scale.detach().cpu()
+            if full_cov:
+                scales[i*batchsize:min(i*batchsize+batchsize, num)] = normal.covariance_matrix.detach().cpu()
+            else:
+                scales[i*batchsize:min(i*batchsize+batchsize, num)] = normal.scale.detach().cpu()
     return pis, locs, scales
 
 def get_loglik(pi, loc, scale, x, margin_dim, exp=False):
     shape = x.shape
     loc = loc[..., margin_dim]
-    scale = scale[..., margin_dim]
+    if len(scale.shape) > len(loc.shape):
+        # for full covariance
+        scale = scale[..., margin_dim, margin_dim]
+    else:
+        scale = scale[..., margin_dim]
     normal = torch.distributions.Normal(loc, scale)
     x = x.reshape(-1, loc.shape[0], 1).tile(1, loc.shape[-1])
     loglik = normal.log_prob(x).reshape(*shape[:-1], -1)

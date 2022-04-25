@@ -63,10 +63,10 @@ class NormalNetwork(nn.Module):
             tril[:, :, self.tril_indices[0], self.tril_indices[1]] = tril_values
             # diagonal element must be strictly positive
             # use diag = elu(diag) + 1 to ensure positivity
-            tril = tril - torch.diag_embed(torch.diagonal(tril, dim1=-2, dim2=-1)) + torch.diag_embed(self.elu(torch.diagonal(tril, dim1=-2, dim2=-1)) + 1)
+            tril = tril - torch.diag_embed(torch.diagonal(tril, dim1=-2, dim2=-1)) + torch.diag_embed(self.elu(torch.diagonal(tril, dim1=-2, dim2=-1)) + 1 + 1e-8)
         else:
             tril = self.tril_net(x).reshape(mean.shape[0], self.n_components, -1)
-            tril = torch.diag_embed(self.elu(tril) + 1)
+            tril = torch.diag_embed(self.elu(tril) + 1 + 1e-8)
         return MultivariateNormal(mean, scale_tril=tril)
 
 class CategoricalNetwork(nn.Module):
