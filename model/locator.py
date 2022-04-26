@@ -12,16 +12,14 @@ class Locator(nn.Module):
 
     Ref: https://github.com/patrick-kidger/torchcde/blob/master/example/time_series_classification.py
     '''
-    def __init__(self, input_dim, latent_dim, output_dim, device):
+    def __init__(self, device, n_intervals=4000, threshold=0.5, crop=False, animate=False):
         super(Locator, self).__init__()
         
-        self.input_dim = input_dim
-        self.latent_dim = latent_dim
-        self.n_intervals = 4000
+        self.n_intervals = n_intervals
         self.device = device
         self.unet = utils.UNET_1D(1, 128, 7, 3)
         self.loss = utils.SoftDiceLoss()
-        self.threshold = 0.5
+        self.threshold = threshold
         self.animate = False
         self.crop = False
        

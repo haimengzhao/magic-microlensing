@@ -25,13 +25,13 @@ from tensorboardX import SummaryWriter
 # gpu_ids = [0, 1, 2, 3]
 # n_gpus = len(gpu_ids)
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+os.environ["CUDA_VISIBLE_DEVICES"] = "8"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 gpu_ids=[0]
 n_gpus = 1
 
 parser = argparse.ArgumentParser('CDE-MDN')
-parser.add_argument('--niters', type=int, default=100)
+parser.add_argument('--niters', type=int, default=50)
 parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128 * n_gpus)
 parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-fixrho-0.h5', help="Path for dataset")
@@ -39,11 +39,12 @@ parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KM
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/random-even-batch-0.h5', help="Path for dataset")
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-8dof-located-logsig.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/cde_mdn/', help="Path for save checkpoints")
+parser.add_argument('--name', type=str, default=None, help="Name of the experiment")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
 parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
-parser.add_argument('-ng', '--ngaussians', type=int, default=12, help="Number of Gaussians in mixture density network")
-parser.add_argument('-l', '--latents', type=int, default=64, help="Dim of the latent state")
+parser.add_argument('-ng', '--ngaussians', type=int, default=3, help="Number of Gaussians in mixture density network")
+parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the latent state")
 
 args = parser.parse_args()
 
@@ -59,14 +60,14 @@ if __name__ == '__main__':
 
     print(f'Num of GPUs available: {torch.cuda.device_count()}')
 
-    experimentID = args.load
+    experimentID = args.name
     if experimentID is None:
         # Make a new experiment ID
         experimentID = int(SystemRandom().random() * 100000)
     print(f'ExperimentID: {experimentID}')
     ckpt_path = os.path.join(args.save, "experiment_" + str(experimentID) + '.ckpt')
-    # ckpt_path_load = os.path.join(args.save, "experiment_" + '859' + '.ckpt')
-    ckpt_path_load = ckpt_path
+    ckpt_path_load = os.path.join(args.save, "experiment_" + str(args.load) + '.ckpt')
+    # ckpt_path_load = ckpt_path
     
     input_command = sys.argv
     ind = [i for i in range(len(input_command)) if input_command[i] == "--load"]

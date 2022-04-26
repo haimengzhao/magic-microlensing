@@ -81,7 +81,7 @@ def inference(model, total_size, batch_size, coeffs, device='cpu', full_cov=Fals
                 scales[i*batchsize:min(i*batchsize+batchsize, num)] = normal.scale.detach().cpu()
     return pis, locs, scales
 
-def get_loglik(pi, loc, scale, x, margin_dim, exp=False):
+def get_loglik(pi, loc, scale, x, margin_dim, exp=False, individual_gaussian=False):
     shape = x.shape
     loc = loc[..., margin_dim]
     if len(scale.shape) > len(loc.shape):
@@ -92,7 +92,8 @@ def get_loglik(pi, loc, scale, x, margin_dim, exp=False):
     normal = torch.distributions.Normal(loc, scale)
     x = x.reshape(-1, loc.shape[0], 1).tile(1, loc.shape[-1])
     loglik = normal.log_prob(x).reshape(*shape[:-1], -1)
-    loglik = torch.logsumexp(torch.log(pi) + loglik, dim=-1)
+    if not individual_gaussian:
+        loglik = torch.logsumexp(torch.log(pi) + loglik, dim=-1)
     if exp:
         return torch.exp(loglik)
     return loglik
