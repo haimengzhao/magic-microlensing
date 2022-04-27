@@ -42,8 +42,8 @@ class Locator(nn.Module):
         z = self.unet(z)
         z = z.squeeze(-2)
 
-        left = y[:, [0]] - 2*y[:, [1]]
-        right = y[:, [0]] + 2*y[:, [1]]
+        left = y[:, [0]] - y[:, [1]] / 2
+        right = y[:, [0]] + y[:, [1]] / 2
         zt = X.evaluate(interval)[:, :, 0]
         zt = ((zt > left) * (zt < right)).int()
 
@@ -55,7 +55,7 @@ class Locator(nn.Module):
         timelist = X.evaluate(interval)[:, :, 0]
         plus = torch.sum(torch.abs(diffz) * timelist, dim=-1, keepdim=True)
         minus = torch.sum(diffz * timelist, dim=-1, keepdim=True)
-        reg = torch.hstack([plus / 2, -minus / 4])
+        reg = torch.hstack([plus / 2, -minus])
 
         # plt.plot(timelist[0].cpu(), X.evaluate(interval)[0, :, 1].cpu())
         # plt.plot(timelist[0].cpu(), zt[0].cpu())

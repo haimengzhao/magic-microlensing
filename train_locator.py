@@ -186,7 +186,7 @@ if __name__ == '__main__':
             mse = torch.mean((batch_y - pred_y)**2, dim=0).detach().cpu() # * (std_Y**2)
             
             # loss = loss_func(pred_y, batch_y)
-            loss = mse_z + loss_func(pred_y*torch.tensor([1, 10]).to(device), batch_y*torch.tensor([1, 10]).to(device))/10
+            loss = mse_z + loss_func(pred_y, batch_y)/10
             loss.backward()
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=20)
@@ -216,7 +216,7 @@ if __name__ == '__main__':
                 with torch.no_grad():
                     pred_y, mse_z = model(test_coeffs, test_Y)
                     # loss = loss_func(pred_y, test_Y)
-                    loss = mse_z + loss_func(pred_y*torch.tensor([1, 10]).to(device), test_Y*torch.tensor([1, 10]).to(device))/10
+                    loss = mse_z + loss_func(pred_y, test_Y)/10
 
                     mse = torch.mean((test_Y - pred_y)**2, dim=0).detach().cpu() # * (std_Y**2)
 
