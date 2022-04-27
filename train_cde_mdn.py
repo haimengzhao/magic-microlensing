@@ -43,7 +43,7 @@ parser.add_argument('--name', type=str, default=None, help="Name of the experime
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
 parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
-parser.add_argument('-ng', '--ngaussians', type=int, default=3, help="Number of Gaussians in mixture density network")
+parser.add_argument('-ng', '--ngaussians', type=int, default=12, help="Number of Gaussians in mixture density network")
 parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the latent state")
 
 args = parser.parse_args()

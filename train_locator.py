@@ -36,7 +36,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:4" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -93,12 +93,12 @@ if __name__ == '__main__':
     # print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
 
     X = X[:, :, :2]
-    X[:, :, 1] = (X[:, :, 1] - 14.5 - 2.5 * torch.log10(Y[:, [-1]])) / 0.2
+    # X[:, :, 1] = (X[:, :, 1] - 14.5 - 2.5 * torch.log10(Y[:, [-1]]))
     print(f'normalized X mean: {torch.mean(X[:, :, 1])}\nX std: {torch.mean(torch.std(X[:, :, 1], axis=0))}')
     Y = Y[:, [0, 1]]
         
     # interpolation
-    train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X[:train_size, :, :])
+    train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X[:train_size])
     train_dataset = torch.utils.data.TensorDataset(train_coeffs, Y[:train_size])
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
 
@@ -262,7 +262,7 @@ if __name__ == '__main__':
         # print(f'normalized Y mean: {torch.mean(Y)}\nY std: {torch.mean(torch.std(Y, axis=0)[~std_mask])}')
 
         X = X[:, :, :2]
-        X[:, :, 1] = (X[:, :, 1] - 14.5 - 2.5 * torch.log10(Y[:, [-1]])) / 0.2
+        # X[:, :, 1] = (X[:, :, 1] - 14.5 - 2.5 * torch.log10(Y[:, [-1]]))
         print(f'normalized X mean: {torch.mean(X[:, :, 1])}\nX std: {torch.mean(torch.std(X[:, :, 1], axis=0))}')
         Y = Y[:, [0, 1]]
             

@@ -4,8 +4,8 @@ import torch.nn as nn
 import model.utils as utils
 
 import torchcde
-# import model.mdn as mdn
-import model.mdn_full as mdn
+import model.mdn as mdn
+# import model.mdn_full as mdn
 
 class CDEFunc(nn.Module):
     '''
@@ -92,7 +92,7 @@ class CDE_MDN(nn.Module):
     
     def mdn_loss(self, pi, normal, y):
         loglik = normal.log_prob(y.unsqueeze(1).expand_as(normal.loc))
-        # loglik = torch.sum(loglik, dim=2)
+        loglik = torch.sum(loglik, dim=2)
         loss = -torch.logsumexp(torch.log(pi.probs) + loglik, dim=1)
         return loss.mean()
 

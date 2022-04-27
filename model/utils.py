@@ -83,12 +83,12 @@ def inference(model, total_size, batch_size, coeffs, device='cpu', full_cov=Fals
 
 def get_loglik(pi, loc, scale, x, margin_dim, exp=False, individual_gaussian=False):
     shape = x.shape
-    loc = loc[..., margin_dim]
     if len(scale.shape) > len(loc.shape):
         # for full covariance
         scale = scale[..., margin_dim, margin_dim]
     else:
         scale = scale[..., margin_dim]
+    loc = loc[..., margin_dim]
     normal = torch.distributions.Normal(loc, scale)
     x = x.reshape(-1, loc.shape[0], 1).tile(1, loc.shape[-1])
     loglik = normal.log_prob(x).reshape(*shape[:-1], -1)

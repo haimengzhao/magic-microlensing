@@ -17,6 +17,14 @@ class Locator(nn.Module):
         
         self.n_intervals = n_intervals
         self.device = device
+        self.prefilter = nn.Sequential(
+            nn.Conv1d(1, 16, kernel_size=3, stride=1, padding=1, padding_mode='reflect'),
+            nn.PReLU(),
+            nn.Conv1d(16, 16, kernel_size=15, stride=1, padding=7, padding_mode='reflect'),
+            nn.PReLU(),
+            nn.Conv1d(16, 1, kernel_size=1, stride=1, padding=0, padding_mode='reflect'),
+            nn.PReLU(),
+        )
         self.unet = utils.UNET_1D(1, 128, 7, 3)
         self.loss = utils.SoftDiceLoss()
         self.threshold = threshold
@@ -30,6 +38,7 @@ class Locator(nn.Module):
 
         z = X.evaluate(interval)[:, :, [1]]
         z = z.transpose(-1, -2) # (batch, time, channel) -> (batch, channel, time)
+        z = self.prefilter(z)
         z = self.unet(z)
         z = z.squeeze(-2)
 
@@ -49,9 +58,9 @@ class Locator(nn.Module):
         reg = torch.hstack([plus / 2, -minus / 4])
 
         # plt.plot(timelist[0].cpu(), X.evaluate(interval)[0, :, 1].cpu())
-        # plt.plot(timelist[0].cpu(), zt[0].cpu()+14)
-        # plt.plot(timelist[0].cpu(), z[0].cpu().detach().numpy()+14)
-        # plt.plot(timelist[0].cpu(), diffz[0].cpu().detach().numpy()+14)
+        # plt.plot(timelist[0].cpu(), zt[0].cpu())
+        # plt.plot(timelist[0].cpu(), z[0].cpu().detach().numpy())
+        # plt.plot(timelist[0].cpu(), diffz[0].cpu().detach().numpy())
         # plt.show()
 
         if self.crop and self.training:
