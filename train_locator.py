@@ -36,7 +36,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:6" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:8" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -216,7 +216,7 @@ if __name__ == '__main__':
                 with torch.no_grad():
                     pred_y, mse_z = model(test_coeffs, test_Y)
                     # loss = loss_func(pred_y, test_Y)
-                    loss = mse_z + loss_func(pred_y, test_Y)/10
+                    loss = mse_z + torch.log(loss_func(pred_y, test_Y))
 
                     mse = torch.mean((test_Y - pred_y)**2, dim=0).detach().cpu() # * (std_Y**2)
 

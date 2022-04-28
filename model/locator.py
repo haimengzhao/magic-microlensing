@@ -12,7 +12,7 @@ class Locator(nn.Module):
 
     Ref: https://github.com/patrick-kidger/torchcde/blob/master/example/time_series_classification.py
     '''
-    def __init__(self, device, n_intervals=4000, threshold=0.5, crop=False, animate=False):
+    def __init__(self, device, n_intervals=4000, threshold=0.5, soft_threshold=False, crop=False, animate=False, plot=False):
         super(Locator, self).__init__()
         
         self.n_intervals = n_intervals
@@ -28,8 +28,10 @@ class Locator(nn.Module):
         self.unet = utils.UNET_1D(1, 128, 7, 3)
         self.loss = utils.SoftDiceLoss()
         self.threshold = threshold
-        self.animate = False
-        self.crop = False
+        self.animate = animate
+        self.crop = crop
+        self.soft_threshold = soft_threshold
+        self.plot = plot
        
     def forward(self, coeffs, y):
         X = torchcde.CubicSpline(coeffs)
@@ -47,21 +49,24 @@ class Locator(nn.Module):
         zt = X.evaluate(interval)[:, :, 0]
         zt = ((zt > left) * (zt < right)).int()
 
-        # mse_z = -torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10))
-        mse_z = (self.loss(z, zt)-torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10)))/2
+        mse_z = -torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10))
+        # mse_z = (self.loss(z, zt)-torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10)))/2
 
-        # z = (z > self.threshold).int()
+        if not self.soft_threshold:
+            z = (z > self.threshold).int()
         diffz = torch.diff(z, append=z[:, [-1]])
         timelist = X.evaluate(interval)[:, :, 0]
         plus = torch.sum(torch.abs(diffz) * timelist, dim=-1, keepdim=True)
         minus = torch.sum(diffz * timelist, dim=-1, keepdim=True)
         reg = torch.hstack([plus / 2, -minus])
 
-        # plt.plot(timelist[0].cpu(), X.evaluate(interval)[0, :, 1].cpu())
-        # plt.plot(timelist[0].cpu(), zt[0].cpu())
-        # plt.plot(timelist[0].cpu(), z[0].cpu().detach().numpy())
-        # plt.plot(timelist[0].cpu(), diffz[0].cpu().detach().numpy())
-        # plt.show()
+        if self.plot:
+            avg = torch.mean(X.evaluate(interval)[0, :, 1].cpu()).item()
+            plt.plot(timelist[0].cpu(), X.evaluate(interval)[0, :, 1].cpu())
+            plt.plot(timelist[0].cpu(), zt[0].cpu()+avg)
+            plt.plot(timelist[0].cpu(), z[0].cpu().detach().numpy()+avg)
+            plt.plot(timelist[0].cpu(), diffz[0].cpu().detach().numpy()+avg)
+            plt.show()
 
         # if self.crop and self.training:
         #     length = (torch.rand((1)).to(self.device) + 1) / 2 * (X.interval[-1] - X.interval[0])
