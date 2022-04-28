@@ -63,22 +63,22 @@ class Locator(nn.Module):
         # plt.plot(timelist[0].cpu(), diffz[0].cpu().detach().numpy())
         # plt.show()
 
-        if self.crop and self.training:
-            length = (torch.rand((1)).to(self.device) + 1) / 2 * (X.interval[-1] - X.interval[0])
-            left = torch.rand((1)).to(self.device) * (X.interval[-1] - length - X.interval[0]) + X.interval[0]
-            interval = torch.linspace(left.item(), left.item() + length.item(), self.n_intervals).to(self.device)
-            z = X.evaluate(interval)[:, :, [1]]
-            z = z.transpose(-1, -2) # (batch, time, channel) -> (batch, channel, time)
-            z = self.unet(z)
-            z = z.squeeze(-2)
+        # if self.crop and self.training:
+        #     length = (torch.rand((1)).to(self.device) + 1) / 2 * (X.interval[-1] - X.interval[0])
+        #     left = torch.rand((1)).to(self.device) * (X.interval[-1] - length - X.interval[0]) + X.interval[0]
+        #     interval = torch.linspace(left.item(), left.item() + length.item(), self.n_intervals).to(self.device)
+        #     z = X.evaluate(interval)[:, :, [1]]
+        #     z = z.transpose(-1, -2) # (batch, time, channel) -> (batch, channel, time)
+        #     z = self.unet(z)
+        #     z = z.squeeze(-2)
 
-            left = y[:, [0]] - 2*y[:, [1]]
-            right = y[:, [0]] + 2*y[:, [1]]
-            zt = X.evaluate(interval)[:, :, 0]
-            zt = ((zt > left) * (zt < right)).int()
+        #     left = y[:, [0]] - 2*y[:, [1]]
+        #     right = y[:, [0]] + 2*y[:, [1]]
+        #     zt = X.evaluate(interval)[:, :, 0]
+        #     zt = ((zt > left) * (zt < right)).int()
 
-            # mse_z = -torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10))
-            mse_z = (self.loss(z, zt)-torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10)))/2
+        #     # mse_z = -torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10))
+        #     mse_z = (self.loss(z, zt)-torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10)))/2
 
         if self.animate:
             return reg, mse_z, z

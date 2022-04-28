@@ -161,7 +161,7 @@ def plot_params(num, Y, pred_global, pred_global_loglik, pred_close, pred_close_
     at = AnchoredText(
         "RMSE=%.4f" % (np.sqrt(torch.mean((Y[:num, 1] -  pred_close.numpy()[:num, 1])**2).detach().cpu().item())), prop=dict(size=12), frameon=False, loc='upper left')
     axq.add_artist(at)
-    rmse.append(np.sqrt(torch.mean((Y[:num, 2] -  pred_close.numpy()[:num, 2])**2).detach().cpu().item()))
+    rmse.append(np.sqrt(torch.mean((Y[:num, 1] -  pred_close.numpy()[:num, 1])**2).detach().cpu().item()))
     
     axs = plt.subplot2grid(shape=(2, 4), loc=(0, 1), rowspan=1, colspan=1)
     axs.axis('square')

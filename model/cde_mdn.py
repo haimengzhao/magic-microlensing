@@ -79,7 +79,7 @@ class CDE_MDN(nn.Module):
                               func=self.cde_func,
                               t=X.interval,
                               adjoint=False,
-                              method="dopri5", rtol=1e-5, atol=1e-7)
+                              method="dopri5", rtol=1e-3, atol=1e-5)
 
         z_T = z_T[:, -1]
         z_T = self.readout(z_T)
