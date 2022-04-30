@@ -25,7 +25,7 @@ parser.add_argument('--niters', type=int, default=1000)
 parser.add_argument('--lr',  type=float, default=4e-3, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
-parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-loc-denoised-0.h5', help="Path for dataset")
+parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-loc-0.h5', help="Path for dataset")
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-8dof.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/locator/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
@@ -36,7 +36,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:8" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -186,7 +186,7 @@ if __name__ == '__main__':
             mse = torch.mean((batch_y - pred_y)**2, dim=0).detach().cpu() # * (std_Y**2)
             
             # loss = loss_func(pred_y, batch_y)
-            loss = mse_z + loss_func(pred_y, batch_y)/10
+            loss = mse_z + torch.log(loss_func(pred_y, batch_y) + 1e-8)
             loss.backward()
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=20)

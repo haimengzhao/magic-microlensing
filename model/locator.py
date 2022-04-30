@@ -44,12 +44,12 @@ class Locator(nn.Module):
         z = self.unet(z)
         z = z.squeeze(-2)
 
-        left = y[:, [0]] - y[:, [1]] / 2
-        right = y[:, [0]] + y[:, [1]] / 2
+        left = y[:, [0]] - y[:, [1]] / 10
+        right = y[:, [0]] + y[:, [1]] / 10
         zt = X.evaluate(interval)[:, :, 0]
-        zt = ((zt > left) * (zt < right)).int()
+        zt = ((zt > left) * (zt < right)).int().float()
 
-        mse_z = -torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10))
+        cross_entropy = -torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10))
         # mse_z = (self.loss(z, zt)-torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10)))/2
 
         if not self.soft_threshold:
@@ -58,7 +58,14 @@ class Locator(nn.Module):
         timelist = X.evaluate(interval)[:, :, 0]
         plus = torch.sum(torch.abs(diffz) * timelist, dim=-1, keepdim=True)
         minus = torch.sum(diffz * timelist, dim=-1, keepdim=True)
-        reg = torch.hstack([plus / 2, -minus])
+        reg = torch.hstack([plus / 2, -minus * 5])
+
+        mse_z = torch.log(torch.mean((z-zt)**2) + 1e-10)
+        length_penalty = torch.log(torch.mean((torch.sum(z, dim=-1) - torch.sum(zt, dim=-1))**2) + 1e-10)
+        diffz_abssum_penalty = torch.log(torch.mean((torch.sum(torch.abs(diffz), dim=-1) - 2.)**2) + 1e-10)
+        diffz_sum_penalty = torch.log(torch.mean((torch.sum(diffz.float(), dim=-1))**2) + 1e-10)
+
+        loss_z = cross_entropy + mse_z + length_penalty + diffz_abssum_penalty + diffz_sum_penalty
 
         if self.plot:
             avg = torch.mean(X.evaluate(interval)[0, :, 1].cpu()).item()
@@ -86,5 +93,5 @@ class Locator(nn.Module):
         #     mse_z = (self.loss(z, zt)-torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10)))/2
 
         if self.animate:
-            return reg, mse_z, z
-        return reg, mse_z
+            return reg, loss_z, z
+        return reg, loss_z
