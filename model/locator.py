@@ -27,8 +27,8 @@ class Locator(nn.Module):
             nn.PReLU(),
         )
         self.unet = utils.UNET_1D(1, 128, 7, 3)
-        self.loss = utils.focal_loss
-        # self.loss = utils.DiceLoss()
+        # self.loss = utils.focal_loss
+        self.loss = utils.DiceLoss()
         self.threshold = threshold
         self.animate = animate
         self.crop = crop
@@ -42,7 +42,7 @@ class Locator(nn.Module):
 
         z = X.evaluate(interval)[:, :, [1]]
         z = z.transpose(-1, -2) # (batch, time, channel) -> (batch, channel, time)
-        z = self.prefilter(z)
+        z = self.prefilter(z) + z
         z = self.unet(z)
         z = z.squeeze(-2)
 
@@ -64,11 +64,11 @@ class Locator(nn.Module):
         reg = torch.hstack([plus / 2, -minus * 3 / 2])
 
         # length_penalty = torch.log(torch.mean((torch.sum(z, dim=-1) - torch.sum(zt, dim=-1))**2) + 1e-10)
-        # diffz_abssum_penalty = torch.log(torch.mean((torch.sum(torch.abs(diffz), dim=-1) - 2.)**2) + 1e-10)
+        diffz_abssum_penalty = torch.mean((torch.sum(torch.abs(diffz), dim=-1) - 2.)**2)
         # diffz_sum_penalty = torch.log(torch.mean((torch.sum(diffz.float(), dim=-1))**2) + 1e-10)
 
         # loss_z = cross_entropy # + length_penalty + diffz_abssum_penalty + diffz_sum_penalty
-        loss_z = dice_loss
+        loss_z = cross_entropy + dice_loss + diffz_abssum_penalty
 
         if self.plot:
             avg = torch.mean(X.evaluate(interval)[0, :, 1].cpu()).item()

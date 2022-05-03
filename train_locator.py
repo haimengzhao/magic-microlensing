@@ -36,7 +36,7 @@ parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the la
 
 args = parser.parse_args()
 
-device = torch.device("cuda:4" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -186,7 +186,7 @@ if __name__ == '__main__':
             mse = torch.mean((batch_y - pred_y)**2, dim=0).detach().cpu() # * (std_Y**2)
             
             # loss = loss_func(pred_y, batch_y)
-            loss = mse_z # + torch.log(loss_func(pred_y, batch_y) + 1e-8)
+            loss = mse_z #+ torch.log(loss_func(pred_y, batch_y) + 1e-10) / 10
             loss.backward()
 
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=20)
@@ -216,7 +216,7 @@ if __name__ == '__main__':
                 with torch.no_grad():
                     pred_y, mse_z = model(test_coeffs, test_Y)
                     # loss = loss_func(pred_y, test_Y)
-                    loss = mse_z # + torch.log(loss_func(pred_y, test_Y))
+                    loss = mse_z #+ torch.log(loss_func(pred_y, test_Y) + 1e-10) / 10
 
                     mse = torch.mean((test_Y - pred_y)**2, dim=0).detach().cpu() # * (std_Y**2)
 
