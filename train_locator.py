@@ -21,7 +21,7 @@ from tensorboardX import SummaryWriter
 
 import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser('Locator')
-parser.add_argument('--niters', type=int, default=1000)
+parser.add_argument('--niters', type=int, default=15)
 parser.add_argument('--lr',  type=float, default=4e-3, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
@@ -85,6 +85,12 @@ if __name__ == '__main__':
 
     # # normalize
     # Y: t_0, t_E, u_0, rho, q, s, alpha, f_s
+
+    # use center of mag
+    ind_larges = Y[:, 5] > 1
+    delta = Y[ind_larges, 4] / (1 + Y[ind_larges, 4]) * (Y[ind_larges, 5] - 1 / Y[ind_larges, 5])
+    Y[ind_larges, 0] -= Y[ind_larges, 1] * np.cos(np.pi/180*Y[ind_larges, -2]) * delta
+
     Y = Y[:, [0, 1, -1]]
     mean_y = torch.mean(Y, axis=0)
     std_y = torch.std(Y, axis=0)
@@ -254,6 +260,12 @@ if __name__ == '__main__':
 
         # # normalize
         # Y: t_0, t_E, u_0, rho, q, s, alpha, f_s
+
+        # use center of mag
+        ind_larges = Y[:, 5] > 1
+        delta = Y[ind_larges, 4] / (1 + Y[ind_larges, 4]) * (Y[ind_larges, 5] - 1 / Y[ind_larges, 5])
+        Y[ind_larges, 0] -= Y[ind_larges, 1] * np.cos(np.pi/180*Y[ind_larges, -2]) * delta
+
         Y = Y[:, [0, 1, -1]]
         mean_y = torch.mean(Y, axis=0)
         std_y = torch.std(Y, axis=0)
