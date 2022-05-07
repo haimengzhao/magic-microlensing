@@ -284,68 +284,6 @@ def simulate_lc(t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, lgfs, relative_uncert
     return lc
 
 
-def tensor_linspace(start, end, steps=10):
-    """
-    Vectorized version of torch.linspace.
-    Inputs:
-    - start: Tensor of any shape
-    - end: Tensor of the same shape as start
-    - steps: Integer
-    Returns:
-    - out: Tensor of shape start.size() + (steps,), such that
-      out.select(-1, 0) == start, out.select(-1, -1) == end,
-      and the other elements of out linearly interpolate between
-      start and end.
-
-    From: https://github.com/zhaobozb/layout2im/blob/master/models/bilinear.py#L246
-    """
-    assert start.size() == end.size()
-    view_size = start.size() + (1,)
-    w_size = (1,) * start.dim() + (steps,)
-    out_size = start.size() + (steps,)
-
-    start_w = torch.linspace(1, 0, steps=steps).to(start)
-    start_w = start_w.view(w_size).expand(out_size)
-    end_w = torch.linspace(0, 1, steps=steps).to(start)
-    end_w = end_w.view(w_size).expand(out_size)
-
-    start = start.contiguous().view(view_size).expand(out_size)
-    end = end.contiguous().view(view_size).expand(out_size)
-
-    out = start_w * start + end_w * end
-    return out
-
-class FocalLoss(nn.Module):
-    def __init__(self, gamma=0, alpha=None, size_average=True):
-        super(FocalLoss, self).__init__()
-        self.gamma = gamma
-        self.alpha = alpha
-        if isinstance(alpha,(float,int)): self.alpha = torch.Tensor([alpha,1-alpha])
-        if isinstance(alpha,list): self.alpha = torch.Tensor(alpha)
-        self.size_average = size_average
-
-    def forward(self, input, target):
-        if input.dim()>2:
-            input = input.view(input.size(0),input.size(1),-1)  # N,C,H,W => N,C,H*W
-            input = input.transpose(1,2)    # N,C,H*W => N,H*W,C
-            input = input.contiguous().view(-1,input.size(2))   # N,H*W,C => N*H*W,C
-        target = target.view(-1,1)
-
-        logpt = F.log_softmax(input)
-        logpt = logpt.gather(1,target)
-        logpt = logpt.view(-1)
-        pt = logpt.data.exp()
-
-        if self.alpha is not None:
-            if self.alpha.type()!=input.data.type():
-                self.alpha = self.alpha.type_as(input.data)
-            at = self.alpha.gather(0,target.data.view(-1))
-            logpt = logpt * at
-
-        loss = -1 * (1-pt)**self.gamma * logpt
-        if self.size_average: return loss.mean()
-        else: return loss.sum()
-
 def focal_loss(
     inputs: torch.Tensor,
     targets: torch.Tensor,
@@ -540,20 +478,6 @@ class UNET_1D(nn.Module):
         
         return out
 
-def get_dict_template():
-    '''
-    Template for data_dict
-
-    Modified from https://github.com/YuliaRubanova/latent_ode/blob/master/lib/utils.py
-    '''
-    return {"observed_data": None,
-            "observed_tp": None,
-            "data_to_predict": None,
-            "tp_to_predict": None,
-            "observed_mask": None,
-            "mask_predicted_data": None,
-            "regression_to_predict": None
-            }
 
 def makedirs(dirname):
     '''
@@ -659,22 +583,6 @@ def get_device(tensor):
         device = tensor.get_device()
     return device
 
-def split_last_dim(data):
-    '''
-    Split the last dim of data into halves.
-
-    Modified from https://github.com/YuliaRubanova/latent_ode/blob/master/lib/utils.py
-    '''
-    last_dim = data.size()[-1]
-    last_dim = last_dim//2
-
-    if len(data.size()) == 3:
-        res = data[:,:,:last_dim], data[:,:,last_dim:]
-
-    if len(data.size()) == 2:
-        res = data[:,:last_dim], data[:,last_dim:]
-    return res
-
 def sample_standard_gaussian(mu, sigma):
     '''
     Sample from a gaussian given mu and sigma.
@@ -687,109 +595,6 @@ def sample_standard_gaussian(mu, sigma):
     r = d.sample(mu.size()).squeeze(-1)
     return r * sigma.float() + mu.float()
 
-def get_next_batch(random_dataloader, label_dataloader, even_dataloader, device):
-    '''
-    Prepare batch by unioning all time points.
-
-    Modified from https://github.com/YuliaRubanova/latent_ode/blob/master/lib/utils.py
-    '''
-    # Make the union of all time points and perform normalization across the whole dataset
-    X_random = random_dataloader.__next__()
-    Y = label_dataloader.__next__()
-    X_even = even_dataloader.__next__()
-
-    batch_dict = get_dict_template()
-
-    D = X_random.shape[-1] - 1
-    combined_tt, inverse_indices = torch.unique(X_random[:, :, 0].flatten(), sorted=True, return_inverse=True)
-    combined_tt = combined_tt.to(device)
-
-    offset = 0
-    combined_vals = torch.zeros([len(X_random), len(combined_tt), D]).to(device)
-    
-    for b in range(len(X_random)):
-        tt = X_random[b, :, 0].to(device)
-        vals = X_random[b, :, 1:].to(device).float()
-
-        indices = inverse_indices[offset:(offset + len(tt))]
-        offset += len(tt)
-
-        combined_vals[b, indices] = vals
-
-    batch_dict["observed_data"] = combined_vals
-    batch_dict["observed_tp"] = combined_tt
-    batch_dict["data_to_predict"] = X_even[:, :, 1].to(device).float()
-    batch_dict["tp_to_predict"] = X_even[0, :, 0].to(device).float()
-    batch_dict["regression_to_predict"] = Y.to(device)
-
-    return batch_dict
-
-def compute_loss_all_batches(model,
-    test_random_dataloader, test_label_dataloader, test_even_dataloader, n_batches, device,
-    n_traj_samples = 1, kl_coef = 1.):
-    '''
-    Compute loss.
-
-    Modified from https://github.com/YuliaRubanova/latent_ode/blob/master/lib/utils.py
-    '''
-
-    total = {}
-    total["loss"] = 0
-    total["likelihood"] = 0
-    total["mse"] = 0
-    total["kl_first_p"] = 0
-    total["std_first_p"] = 0
-    total["reg_loss"] = 0
-
-    n_test_batches = 0
-    
-    reg_predictions = torch.Tensor([]).to(device)
-    reg_to_predict =  torch.Tensor([]).to(device)
-
-    for i in range(n_batches):
-        print("Computing loss... " + str(i))
-        
-        batch_dict = get_next_batch(test_random_dataloader, test_label_dataloader, test_even_dataloader, device)
-
-        results  = model.compute_all_losses(batch_dict,
-            n_traj_samples = n_traj_samples, kl_coef = kl_coef)
-
-        n_labels = model.n_labels # batch_dict["labels"].size(-1)
-        n_traj_samples = results["regression_predicted"].size(0)
-
-        classif_predictions = torch.cat((classif_predictions, 
-            results["regression_predicted"].reshape(n_traj_samples, -1, n_labels)),1)
-        reg_to_predict = torch.cat((reg_to_predict, 
-            batch_dict["regression_to_predict"].reshape(-1, n_labels)),0)
-
-        for key in total.keys(): 
-            if key in results:
-                var = results[key]
-                if isinstance(var, torch.Tensor):
-                    var = var.detach()
-                total[key] += var
-
-        n_test_batches += 1
-
-    if n_test_batches > 0:
-        for key, value in total.items():
-            total[key] = total[key] / n_test_batches
-
-    return total
-
-def inf_generator(iterable):
-    """
-    Allows training with DataLoaders in a single infinite loop:
-        for i, (x, y) in enumerate(inf_generator(train_loader)):
-    
-    Modified from https://github.com/YuliaRubanova/latent_ode/blob/master/lib/utils.py
-    """
-    iterator = iterable.__iter__()
-    while True:
-        try:
-            yield iterator.__next__()
-        except StopIteration:
-            iterator = iterable.__iter__()
 
 def get_logger(logpath, filepath, package_files=[],
                displaying=True, saving=True, debug=False):
@@ -832,20 +637,4 @@ def update_learning_rate(optimizer, decay_rate = 0.999, lowest = 1e-3):
         lr = max(lr * decay_rate, lowest)
         param_group['lr'] = lr
 
-def linspace_vector(start, end, n_points):
-	# start is either one value or a vector
-	size = np.prod(start.size())
-
-	assert(start.size() == end.size())
-	if size == 1:
-		# start and end are 1d-tensors
-		res = torch.linspace(start, end, n_points)
-	else:
-		# start and end are vectors
-		res = torch.Tensor()
-		for i in range(0, start.size(0)):
-			res = torch.cat((res, 
-				torch.linspace(start[i], end[i], n_points)),0)
-		res = torch.t(res.reshape(start.size(0), n_points))
-	return res
 
