@@ -82,8 +82,8 @@ if __name__ == '__main__':
     X = X[nanind]
 
     ind_smallte = torch.where(Y[:, 1] < 40)[0]
-    Y = Y[nanind]
-    X = X[nanind]
+    Y = Y[ind_smallte]
+    X = X[ind_smallte]
 
     test_size = 1024
     train_size = len(Y) - test_size
@@ -260,8 +260,8 @@ if __name__ == '__main__':
         X = X[nanind]
 
         ind_smallte = torch.where(Y[:, 1] < 40)[0]
-        Y = Y[nanind]
-        X = X[nanind]
+        Y = Y[ind_smallte]
+        X = X[ind_smallte]
 
         test_size = 1024
         train_size = len(Y) - test_size
