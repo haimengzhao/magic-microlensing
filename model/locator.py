@@ -35,20 +35,29 @@ class Locator(nn.Module):
         self.soft_threshold = soft_threshold
         self.plot = plot
        
-    def forward(self, coeffs, y):
+    def forward(self, coeffs, y, interval=None):
         X = torchcde.CubicSpline(coeffs)
 
-        interval = torch.linspace(X.interval[0], X.interval[-1], self.n_intervals).to(self.device)
+        if interval is None:
+            interval = torch.linspace(X.interval[0], X.interval[-1], self.n_intervals).to(self.device)
+        else:
+            interval = interval.to(self.device)
 
-        z = X.evaluate(interval)[:, :, [1]]
-        z = z.transpose(-1, -2) # (batch, time, channel) -> (batch, channel, time)
+        z = X.evaluate(interval)
+        if len(z.shape) > 3:
+            z = torch.diagonal(z, dim1=0, dim2=1).permute(2, 0, 1)
+        z0 = z[:, :, [1]]
+        z = z0.transpose(-1, -2) # (batch, time, channel) -> (batch, channel, time)
         z = self.prefilter(z) + z
         z = self.unet(z)
         z = z.squeeze(-2)
 
         left = y[:, [0]] - y[:, [1]] / 3
         right = y[:, [0]] + y[:, [1]] / 3
-        zt = X.evaluate(interval)[:, :, 0]
+        zt = X.evaluate(interval)
+        if len(zt.shape) > 3:
+            zt = torch.diagonal(zt, dim1=0, dim2=1).permute(2, 0, 1)
+        zt = zt[:, :, 0]
         zt = ((zt > left) * (zt < right)).int().float()
 
         cross_entropy = -torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10))
@@ -58,7 +67,10 @@ class Locator(nn.Module):
         if not self.soft_threshold:
             z = (z > self.threshold).int()
         diffz = torch.diff(z, append=z[:, [-1]])
-        timelist = X.evaluate(interval)[:, :, 0]
+        timelist = X.evaluate(interval)
+        if len(timelist.shape) > 3:
+            timelist = torch.diagonal(timelist, dim1=0, dim2=1).permute(2, 0, 1)
+        timelist = timelist[:, :, 0]
         plus = torch.sum(torch.abs(diffz) * timelist, dim=-1, keepdim=True)
         minus = torch.sum(diffz * timelist, dim=-1, keepdim=True)
         reg = torch.hstack([plus / 2, -minus * 3 / 2])
@@ -71,8 +83,8 @@ class Locator(nn.Module):
         loss_z = cross_entropy + dice_loss + diffz_abssum_penalty
 
         if self.plot:
-            avg = torch.mean(X.evaluate(interval)[0, :, 1].cpu()).item()
-            plt.plot(timelist[0].cpu(), X.evaluate(interval)[0, :, 1].cpu())
+            avg = torch.mean(z0[0, :, 0].cpu()).item()
+            plt.plot(timelist[0].cpu(), z0[0, :, 0].cpu())
             plt.plot(timelist[0].cpu(), zt[0].cpu()+avg)
             plt.plot(timelist[0].cpu(), z[0].cpu().detach().numpy()+avg)
             plt.plot(timelist[0].cpu(), diffz[0].cpu().detach().numpy()+avg)
