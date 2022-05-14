@@ -20,6 +20,10 @@ import torchcde
 from tensorboardX import SummaryWriter
 
 import matplotlib.pyplot as plt
+
+k = 2
+
+
 parser = argparse.ArgumentParser('Locator')
 parser.add_argument('--niters', type=int, default=15)
 parser.add_argument('--lr',  type=float, default=4e-3, help="Starting learning rate")
@@ -29,10 +33,9 @@ parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KM
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-8dof.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/locator/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
+parser.add_argument('--name', type=str, default=None, help="Name of the experiment")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
 parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
-
-parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the latent state")
 
 args = parser.parse_args()
 
@@ -49,14 +52,14 @@ if __name__ == '__main__':
 
     print(f'Num of GPUs available: {torch.cuda.device_count()}')
 
-    experimentID = args.load
+    experimentID = args.name
     if experimentID is None:
         # Make a new experiment ID
         experimentID = int(SystemRandom().random() * 100000)
     print(f'ExperimentID: {experimentID}')
     ckpt_path = os.path.join(args.save, "experiment_" + str(experimentID) + '.ckpt')
-    # ckpt_path_load = os.path.join(args.save, "experiment_" + '89670' + '.ckpt')
-    ckpt_path_load = ckpt_path
+    ckpt_path_load = os.path.join(args.save, "experiment_" + str(args.load) + '.ckpt')
+    # ckpt_path_load = ckpt_path
     
     input_command = sys.argv
     ind = [i for i in range(len(input_command)) if input_command[i] == "--load"]
@@ -78,6 +81,10 @@ if __name__ == '__main__':
     Y = Y[nanind]
     X = X[nanind]
 
+    ind_smallte = torch.where(Y[:, 1] < 40)[0]
+    Y = Y[nanind]
+    X = X[nanind]
+
     test_size = 1024
     train_size = len(Y) - test_size
     # train_size = 128
@@ -87,9 +94,9 @@ if __name__ == '__main__':
     # Y: t_0, t_E, u_0, rho, q, s, alpha, f_s
 
     # use center of mag
-    ind_larges = Y[:, 5] > 1
-    delta = Y[ind_larges, 4] / (1 + Y[ind_larges, 4]) * (Y[ind_larges, 5] - 1 / Y[ind_larges, 5])
-    Y[ind_larges, 0] -= Y[ind_larges, 1] * np.cos(np.pi/180*Y[ind_larges, -2]) * delta
+    # ind_larges = Y[:, 5] > 1
+    # delta = Y[ind_larges, 4] / (1 + Y[ind_larges, 4]) * (Y[ind_larges, 5] - 1 / Y[ind_larges, 5])
+    # Y[ind_larges, 0] -= Y[ind_larges, 1] * np.cos(np.pi/180*Y[ind_larges, -2]) * delta
 
     Y = Y[:, [0, 1, -1]]
     mean_y = torch.mean(Y, axis=0)
@@ -113,14 +120,13 @@ if __name__ == '__main__':
     
     output_dim = Y.shape[-1]
     input_dim = X.shape[-1]
-    latent_dim = args.latents
 
     del Y
     del X
     gc.collect()
     ##################################################################
     # Create the model
-    model = Locator(device, threshold=0.5).to(device)
+    model = Locator(device, k=k, threshold=0.5).to(device)
     ##################################################################
     # Load checkpoint and evaluate the model
     if args.load is not None:
@@ -253,6 +259,10 @@ if __name__ == '__main__':
         Y = Y[nanind]
         X = X[nanind]
 
+        ind_smallte = torch.where(Y[:, 1] < 40)[0]
+        Y = Y[nanind]
+        X = X[nanind]
+
         test_size = 1024
         train_size = len(Y) - test_size
         # train_size = 128
@@ -262,9 +272,9 @@ if __name__ == '__main__':
         # Y: t_0, t_E, u_0, rho, q, s, alpha, f_s
 
         # use center of mag
-        ind_larges = Y[:, 5] > 1
-        delta = Y[ind_larges, 4] / (1 + Y[ind_larges, 4]) * (Y[ind_larges, 5] - 1 / Y[ind_larges, 5])
-        Y[ind_larges, 0] -= Y[ind_larges, 1] * np.cos(np.pi/180*Y[ind_larges, -2]) * delta
+        # ind_larges = Y[:, 5] > 1
+        # delta = Y[ind_larges, 4] / (1 + Y[ind_larges, 4]) * (Y[ind_larges, 5] - 1 / Y[ind_larges, 5])
+        # Y[ind_larges, 0] -= Y[ind_larges, 1] * np.cos(np.pi/180*Y[ind_larges, -2]) * delta
 
         Y = Y[:, [0, 1, -1]]
         mean_y = torch.mean(Y, axis=0)
@@ -288,7 +298,6 @@ if __name__ == '__main__':
         
         output_dim = Y.shape[-1]
         input_dim = X.shape[-1]
-        latent_dim = args.latents
 
         del Y
         del X

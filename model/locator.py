@@ -13,9 +13,9 @@ class Locator(nn.Module):
 
     Ref: https://github.com/patrick-kidger/torchcde/blob/master/example/time_series_classification.py
     '''
-    def __init__(self, device, n_intervals=4000, threshold=0.5, soft_threshold=True, crop=False, animate=False, plot=False):
+    def __init__(self, device, k=1/3, n_intervals=4000, threshold=0.5, soft_threshold=True, crop=False, animate=False, plot=False):
         super(Locator, self).__init__()
-        
+        self.k = k
         self.n_intervals = n_intervals
         self.device = device
         self.prefilter = nn.Sequential(
@@ -52,8 +52,8 @@ class Locator(nn.Module):
         z = self.unet(z)
         z = z.squeeze(-2)
 
-        left = y[:, [0]] - y[:, [1]] / 3
-        right = y[:, [0]] + y[:, [1]] / 3
+        left = y[:, [0]] - y[:, [1]] * self.k
+        right = y[:, [0]] + y[:, [1]] * self.k
         zt = X.evaluate(interval)
         if len(zt.shape) > 3:
             zt = torch.diagonal(zt, dim1=0, dim2=1).permute(2, 0, 1)
@@ -73,7 +73,7 @@ class Locator(nn.Module):
         timelist = timelist[:, :, 0]
         plus = torch.sum(torch.abs(diffz) * timelist, dim=-1, keepdim=True)
         minus = torch.sum(diffz * timelist, dim=-1, keepdim=True)
-        reg = torch.hstack([plus / 2, -minus * 3 / 2])
+        reg = torch.hstack([plus / 2, -minus / (2 * self.k)])
 
         # length_penalty = torch.log(torch.mean((torch.sum(z, dim=-1) - torch.sum(zt, dim=-1))**2) + 1e-10)
         diffz_abssum_penalty = torch.mean((torch.sum(torch.abs(diffz), dim=-1) - 2.)**2)
