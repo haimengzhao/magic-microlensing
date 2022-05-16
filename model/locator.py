@@ -64,13 +64,16 @@ class Locator(nn.Module):
         dice_loss = self.loss(z, zt)
         # mse_z = (self.loss(z, zt)-torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10)))/2
 
-        if not self.soft_threshold:
-            z = (z > self.threshold).int()
-        diffz = torch.diff(z, append=z[:, [-1]])
+
         timelist = X.evaluate(interval)
         if len(timelist.shape) > 3:
             timelist = torch.diagonal(timelist, dim1=0, dim2=1).permute(2, 0, 1)
         timelist = timelist[:, :, 0]
+
+        if not self.soft_threshold:
+            z = (z > self.threshold).int()
+        diffz = torch.diff(z, append=z[:, [-1]])
+
         plus = torch.sum(torch.abs(diffz) * timelist, dim=-1, keepdim=True)
         minus = torch.sum(diffz * timelist, dim=-1, keepdim=True)
         reg = torch.hstack([plus / 2, -minus / (2 * self.k)])
@@ -107,6 +110,7 @@ class Locator(nn.Module):
         #     # mse_z = -torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10))
         #     mse_z = (self.loss(z, zt)-torch.mean(zt*torch.log(z+1e-10)+(1-zt)*torch.log(1-z+1e-10)))/2
 
+        mask = torch.stack([timelist.detach(), z.detach()], dim=-1)
         if self.animate:
-            return reg, loss_z, z
+            return reg, loss_z, mask
         return reg, loss_z
