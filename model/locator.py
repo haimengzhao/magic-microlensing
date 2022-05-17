@@ -13,10 +13,11 @@ class Locator(nn.Module):
 
     Ref: https://github.com/patrick-kidger/torchcde/blob/master/example/time_series_classification.py
     '''
-    def __init__(self, device, k=1/3, n_intervals=4000, threshold=0.5, soft_threshold=True, crop=False, animate=False, plot=False):
+    def __init__(self, device, k=1/3, n_intervals=4000, threshold=0.5, soft_threshold=True, crop=False, animate=False, plot=False, method='diff'):
         super(Locator, self).__init__()
         self.k = k
         self.n_intervals = n_intervals
+        self.method = method
         self.device = device
         self.prefilter = nn.Sequential(
             nn.Conv1d(1, 16, kernel_size=3, stride=1, padding=1, padding_mode='reflect'),
@@ -74,9 +75,17 @@ class Locator(nn.Module):
             z = (z > self.threshold).int()
         diffz = torch.diff(z, append=z[:, [-1]])
 
-        plus = torch.sum(torch.abs(diffz) * timelist, dim=-1, keepdim=True)
-        minus = torch.sum(diffz * timelist, dim=-1, keepdim=True)
-        reg = torch.hstack([plus / 2, -minus / (2 * self.k)])
+        if self.method == 'diff':
+            plus = torch.sum(torch.abs(diffz) * timelist, dim=-1, keepdim=True)
+            minus = torch.sum(diffz * timelist, dim=-1, keepdim=True)
+            reg = torch.hstack([plus / 2, -minus / (2 * self.k)])
+        elif self.method == 'avg':
+            avg = torch.sum(z * timelist, dim=-1, keepdim=True) / torch.sum(z, dim=-1, keepdim=True)
+            area = torch.sum(z * torch.diff(timelist, append=timelist[:, [-1]]), dim=-1, keepdim=True)
+            reg = torch.hstack([avg, area / (2 * self.k)])
+        else:
+            print('method can only be diff or avg')
+            
 
         # length_penalty = torch.log(torch.mean((torch.sum(z, dim=-1) - torch.sum(zt, dim=-1))**2) + 1e-10)
         diffz_abssum_penalty = torch.mean((torch.sum(torch.abs(diffz), dim=-1) - 2.)**2)
