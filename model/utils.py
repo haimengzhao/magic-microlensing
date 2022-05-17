@@ -259,7 +259,7 @@ def plot_params(num, Y, pred_global, pred_global_loglik, pred_close, pred_close_
     return rmse
     
 
-def simulate_lc(t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, lgfs, relative_uncertainty=0, n_points=1000, orig=False):
+def simulate_lc(t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, lgfs, relative_uncertainty=0, n_points=1000, orig=False, orig_param=False):
     fs = 10**lgfs
     parameters = {
             't_0': t_0,
@@ -270,6 +270,17 @@ def simulate_lc(t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, lgfs, relative_uncert
             's': 10**lgs, 
             'alpha': alpha_180*180,
         }
+    if orig_param:
+        fs = lgfs
+        parameters = {
+                't_0': t_0,
+                't_E': t_E,
+                'u_0': u_0,
+                'rho': lgrho, 
+                'q': lgq, 
+                's': lgs, 
+                'alpha': alpha_180,
+            }
     modelmm = mm.Model(parameters, coords=None)
     times = modelmm.set_times(t_start=parameters['t_0']-2*parameters['t_E'], t_stop=parameters['t_0']+2*parameters['t_E'], n_epochs=n_points)
     modelmm.set_magnification_methods([parameters['t_0']-2*parameters['t_E'], 'VBBL', parameters['t_0']+2*parameters['t_E']])
