@@ -21,7 +21,7 @@ from tensorboardX import SummaryWriter
 
 import matplotlib.pyplot as plt
 
-k = 0.5
+k = 0.75
 
 
 parser = argparse.ArgumentParser('Locator')
@@ -39,7 +39,7 @@ parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_se
 
 args = parser.parse_args()
 
-device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
