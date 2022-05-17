@@ -76,12 +76,12 @@ class Locator(nn.Module):
         diffz = torch.diff(z, append=z[:, [-1]])
 
         if self.method == 'diff':
-            plus = torch.sum(torch.abs(diffz) * timelist, dim=-1, keepdim=True)
-            minus = torch.sum(diffz * timelist, dim=-1, keepdim=True)
+            plus = torch.trapz(torch.abs(diffz) * timelist, dim=-1).unsqueeze(-1)
+            minus = torch.trapz(diffz * timelist, dim=-1).unsqueeze(-1)
             reg = torch.hstack([plus / 2, -minus / (2 * self.k)])
         elif self.method == 'avg':
-            avg = torch.sum(z * timelist, dim=-1, keepdim=True) / torch.sum(z, dim=-1, keepdim=True)
-            area = torch.sum(z * torch.diff(timelist, append=timelist[:, [-1]]), dim=-1, keepdim=True)
+            area = torch.trapz(z, timelist, dim=-1).unsqueeze(-1)
+            avg = torch.trapz(z * timelist, timelist, dim=-1).unsqueeze(-1) / area
             reg = torch.hstack([avg, area / (2 * self.k)])
         else:
             print('method can only be diff or avg')
