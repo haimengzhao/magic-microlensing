@@ -104,9 +104,9 @@ if __name__ == '__main__':
         X_gap[i] = lc
     X = X_gap
 
-    # random shift and rescale
-    X[:, :, 0] = X[:, :, 0] + torch.randn(X.shape[0]).reshape(-1, 1) * 0.5
-    X[:, :, 0] = X[:, :, 0] * (1 + torch.randn(X.shape[0]).reshape(-1, 1) * 0.2)
+    # # random shift and rescale
+    # X[:, :, 0] = X[:, :, 0] + torch.randn(X.shape[0]).reshape(-1, 1) * 0.5
+    # X[:, :, 0] = X[:, :, 0] * (1 + torch.randn(X.shape[0]).reshape(-1, 1) * 0.2)
 
     test_size = 1024
     train_size = len(Y) - test_size
@@ -123,7 +123,7 @@ if __name__ == '__main__':
     # Y[:, 7] = torch.sin(Y[:, 6] / 180 * np.pi)
     # Y = torch.hstack([Y, torch.sin(Y[:, [6]] / 180 * np.pi)])
     # Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
-    Y[:, 6] = Y[:, 6] / 180 # * np.pi
+    Y[:, 6] = Y[:, 6] / 60 # * np.pi
     Y = Y[:, [2, 4, 5, 6, 7]]
     mean_y = torch.mean(Y, axis=0)
     std_y = torch.std(Y, axis=0)
@@ -385,9 +385,9 @@ if __name__ == '__main__':
             X_gap[i] = lc
         X = X_gap
 
-        # random shift and rescale
-        X[:, :, 0] = X[:, :, 0] + torch.randn(X.shape[0]).reshape(-1, 1) * 0.5
-        X[:, :, 0] = X[:, :, 0] * (1 + torch.randn(X.shape[0]).reshape(-1, 1) * 0.2)
+        # # random shift and rescale
+        # X[:, :, 0] = X[:, :, 0] + torch.randn(X.shape[0]).reshape(-1, 1) * 0.5
+        # X[:, :, 0] = X[:, :, 0] * (1 + torch.randn(X.shape[0]).reshape(-1, 1) * 0.2)
 
         # nanind = torch.where(Y[:, 4]>1e-4)[0]
         # Y = Y[nanind]
@@ -407,7 +407,7 @@ if __name__ == '__main__':
         # Y[:, 7] = torch.sin(Y[:, 6] / 180 * np.pi)
         # Y = torch.hstack([Y, torch.sin(Y[:, [6]] / 180 * np.pi)])
         # Y[:, 6] = torch.cos(Y[:, 6] / 180 * np.pi)
-        Y[:, 6] = Y[:, 6] / 180 # * np.pi
+        Y[:, 6] = Y[:, 6] / 60 # * np.pi
         Y = Y[:, [2, 4, 5, 6, 7]]
         mean_y = torch.mean(Y, axis=0)
         std_y = torch.std(Y, axis=0)
@@ -436,7 +436,7 @@ if __name__ == '__main__':
         # X_rand[:, :, 0] = X_rand[:, :, 0] / 200
             
         # CDE interpolation with log_sig
-        depth = 3; window_length = 5; window_length_rand = 2
+        depth = 3; window_length = 5; 
         train_logsig = torchcde.logsig_windows(X, depth, window_length=window_length)
         train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(train_logsig)
         # train_coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(X_even[:train_size, :, :])
