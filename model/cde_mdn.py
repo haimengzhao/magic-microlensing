@@ -53,6 +53,7 @@ class CDE_MDN(nn.Module):
         self.n_gaussian = n_gaussian
         self.dataparallel = dataparallel
         self.full_cov = full_cov
+        self.output_feature = False
 
         self.cde_func = CDEFunc(input_dim, latent_dim)
         self.initial = nn.Sequential(
@@ -82,6 +83,10 @@ class CDE_MDN(nn.Module):
                               method="dopri5", rtol=1e-3, atol=1e-5)
 
         z_T = z_T[:, -1]
+
+        if self.output_feature:
+            return z_T
+
         z_T = self.readout(z_T)
         pi, normal = self.mdn(z_T)
 
