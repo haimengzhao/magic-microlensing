@@ -259,7 +259,7 @@ def plot_params(num, Y, pred_global, pred_global_loglik, pred_close, pred_close_
     return rmse
     
 
-def simulate_lc(t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, lgfs, relative_uncertainty=0, n_points=1000, orig=False, orig_param=False):
+def simulate_lc(t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, lgfs, relative_uncertainty=0, n_points=1000, orig=False, orig_param=False, tmin=None, tmax=None):
     fs = 10**lgfs
     parameters = {
             't_0': t_0,
@@ -282,8 +282,12 @@ def simulate_lc(t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, lgfs, relative_uncert
                 'alpha': alpha_180,
             }
     modelmm = mm.Model(parameters, coords=None)
-    times = modelmm.set_times(t_start=parameters['t_0']-2*parameters['t_E'], t_stop=parameters['t_0']+2*parameters['t_E'], n_epochs=n_points)
-    modelmm.set_magnification_methods([parameters['t_0']-2*parameters['t_E'], 'VBBL', parameters['t_0']+2*parameters['t_E']])
+    if tmin == None:
+        tmin = parameters['t_0']-2*parameters['t_E']
+    if tmax == None:
+        tmax = parameters['t_0']+2*parameters['t_E']
+    times = modelmm.set_times(t_start=tmin, t_stop=tmax, n_epochs=n_points)
+    modelmm.set_magnification_methods([tmin, 'VBBL', tmax])
     magnification = modelmm.get_magnification(times)
     flux = 1000 * (magnification + (1-fs)/fs)
     flux *= 1 + relative_uncertainty * np.random.randn(len(flux))
