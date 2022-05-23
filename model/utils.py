@@ -10,6 +10,26 @@ import matplotlib.pyplot as plt
 from matplotlib.offsetbox import AnchoredText
 import MulensModel as mm
 
+def get_fsfb(amp, flux, ferr):
+    sig2 = ferr**2
+    wght = flux/sig2
+    d = np.ones(2)
+    d[0] = np.sum(wght*amp)
+    d[1] = np.sum(wght)
+    b = np.zeros((2,2))
+    b[0,0] = np.sum(amp**2/sig2)
+    b[0,1] = np.sum(amp/sig2)
+    b[1,0] = b[0,1]
+    b[1,1] = np.sum(1./sig2)
+    c = np.linalg.inv(b)
+    fs = np.sum(c[0]*d)
+    fb = np.sum(c[1]*d)
+    fserr = np.sqrt(c[0,0])
+    fberr = np.sqrt(c[1,1])
+    fmod = fs*amp+fb
+    chi2 = np.sum((flux-fmod)**2/sig2)
+    return chi2,fs,fb,fserr,fberr
+
 def getfsfb(times, iflux, iferr, t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, **kwargs):
     ''' iflux: data flux values;
     iferr: data flux uncertainties;
