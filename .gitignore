@@ -10,6 +10,7 @@ archive/
 # KMT files
 *.pysis
 *.npy
+*.npz
 
 # package
 torchcde/
@@ -24,6 +25,7 @@ log/
 # pdf docs
 docs/
 *.pdf
+*.png
 
 # mac
 .DS_Store
