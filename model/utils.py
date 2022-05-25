@@ -10,6 +10,18 @@ import matplotlib.pyplot as plt
 from matplotlib.offsetbox import AnchoredText
 import MulensModel as mm
 
+def ecdf(x):
+    xnew = np.sort(x)
+    xval, cdf = [], []
+    for i in range(len(xnew)):
+        cdf.append(i)
+        xval.append(xnew[i])
+        cdf.append(i+1)
+        xval.append(xnew[i])
+    cdf = np.array(cdf)/cdf[-1]
+    xval = np.array(xval)
+    return xval, cdf
+
 def get_fsfb(amp, flux, ferr):
     sig2 = ferr**2
     wght = flux/sig2
