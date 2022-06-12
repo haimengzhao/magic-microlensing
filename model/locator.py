@@ -9,9 +9,23 @@ import matplotlib.pyplot as plt
 
 class Locator(nn.Module):
     '''
-    A Neural CDE Locator.
+    A U-Net Locator.
 
-    Ref: https://github.com/patrick-kidger/torchcde/blob/master/example/time_series_classification.py
+    Args:
+            device (string): torch device.
+            k (float, optional): k, to tune the window length. Defaults to 1/3.
+            n_intervals (int, optional): number of intervals when dividing and interpolating the light curves. Defaults to 4000.
+            threshold (float, optional): threshold of the mask. Defaults to 0.5.
+            soft_threshold (bool, optional): whether to use soft threshold. Defaults to True.
+            crop (bool, optional): whether to random crop a subinterval of the light curve during training. Defaults to False.
+            animate (bool, optional): whether to return the mask for plotting or producing animation. Defaults to False.
+            plot (bool, optional): whether to plot each light curve. Defaults to False.
+            method (str, optional): method to compute t_0 and t_E, 'diff' or 'avg'. Defaults to 'diff'.
+
+    Returns:
+            reg (tensor): prediction of t_0 and t_E.
+            loss_z (tensor): loss function.
+            mask (tensor, if animate==True): predicted mask.
     '''
     def __init__(self, device, k=1/3, n_intervals=4000, threshold=0.5, soft_threshold=True, crop=False, animate=False, plot=False, method='diff'):
         super(Locator, self).__init__()

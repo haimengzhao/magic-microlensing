@@ -5,6 +5,7 @@ import model.utils as utils
 
 import torchcde
 import model.mdn as mdn
+# Uncomment the following line and set full_cov to True to use full covariance MDN.
 # import model.mdn_full as mdn
 
 class CDEFunc(nn.Module):
@@ -44,8 +45,20 @@ class CDEFunc(nn.Module):
 class CDE_MDN(nn.Module):
     '''
     A Neural CDE Mixture Density Network.
+
+    Args:
+            input_dim (int): dimension of the input.
+            latent_dim (int): dimension of the latent space.
+            output_dim (int): dimension of the output.
+            n_gaussian (int, optional): number of Gaussians to use. Defaults to 12.
+            dataparallel (bool, optional): whether to use dataparallel. Defaults to False.
+            full_cov (bool, optional): whether to use full covariance MDN. Defaults to False.
+
+    Returns:
+            pi (tensor): predicted mixture weights.
+            normal (tensor): predicted Gaussians. If dataparallel is True, this is split into loc, scale.
     '''
-    def __init__(self, input_dim, latent_dim, output_dim, n_gaussian=12, dataparallel=False, full_cov=True):
+    def __init__(self, input_dim, latent_dim, output_dim, n_gaussian=12, dataparallel=False, full_cov=False):
         super(CDE_MDN, self).__init__()
         self.input_dim = input_dim
         self.latent_dim = latent_dim
@@ -53,7 +66,7 @@ class CDE_MDN(nn.Module):
         self.n_gaussian = n_gaussian
         self.dataparallel = dataparallel
         self.full_cov = full_cov
-        self.output_feature = False
+        self.output_feature = False # used to explore the embedding/feature space
 
         self.cde_func = CDEFunc(input_dim, latent_dim)
         self.initial = nn.Sequential(
@@ -81,6 +94,7 @@ class CDE_MDN(nn.Module):
                               t=X.interval,
                               adjoint=False,
                               method="dopri5", rtol=1e-3, atol=1e-5)
+        # changing (rtol, atol) from (1e-5, 1e-7) to (1e-3, 1e-5) can speed up 4x with indistinguishable performance
 
         z_T = z_T[:, -1]
 
@@ -96,11 +110,30 @@ class CDE_MDN(nn.Module):
         return pi, normal
     
     def mdn_loss(self, pi, normal, y):
+        """Calculate MDN loss function.
+
+        Args:
+            pi (nn.distributions.OneHotCategorical): mixture weights.
+            normal (nn.distributions.Normal): Gaussians.
+            y (tensor): target, i.e. the ground truth parameters.
+
+        Returns:
+            loss (tensor): loss averaged on a batch of data.
+        """
         loglik = normal.log_prob(y.unsqueeze(1).expand_as(normal.loc))
         loglik = torch.sum(loglik, dim=2)
         loss = -torch.logsumexp(torch.log(pi.probs) + loglik, dim=1)
         return loss.mean()
 
     def sample(self, pi, normal):
+        """Sample from MDN.
+        
+        Args:
+            pi (nn.distributions.OneHotCategorical): mixture weights.
+            normal (nn.distributions.Normal): Gaussians.
+
+        Returns:
+            samples (tensor): one sample for each light curve.
+        """
         samples = torch.sum(pi.sample().unsqueeze(2) * normal.sample(), dim=1)
         return samples
