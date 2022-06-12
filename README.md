@@ -28,7 +28,7 @@ Experiments and tests in the paper can be reproduced with the Jupyter notebooks 
 
 As an example, the ground truth v.s. prediction plots of binary microlensing parameters are as follows (taken from the paper):
 
-![](./figs/param.png#pic_center=300x)
+![](./figs/param.png#pic_center=200x)
 
 # Training
 Run the scripts [`train_locator.py`](./train_locator.py) and [`train_cde_mdn.py`](./train_cde_mdn.py) to train locator and estimator from scratch. More settings can be specified with additional flags (see the script contents).
