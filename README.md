@@ -14,7 +14,9 @@ All codes implemented in PyTorch.
 
 # Abstract
 
-![Schematic Overview.](./figs/model.png#pic_center=200x)
+<p align="center">
+<img align="middle" src="./figs/model.png" width="666" />
+</p>
 
 The modeling of binary microlensing light curves via the standard sampling-based method can be challenging, because of the time-consuming light curve computation and the pathological likelihood landscape in the high-dimensional parameter space. In this work, we present MAGIC, which is a machine learning framework to eﬃciently and accurately infer the microlensing parameters of binary events with realistic data quality. In MAGIC, binary microlensing parameters are divided into two groups and inferred separately with diﬀerent neural networks. The key feature of MAGIC is the introduction of neural controlled diﬀerential equation, which provides the capability to handle light curves with irregular sampling and large data gaps. Based on simulated light curves, we show that MAGIC can achieve fractional uncertainties of a few percent on the binary mass ratio and separation. We also test MAGIC on a real microlensing event. MAGIC is able to locate the degenerate solutions even when large data gaps are introduced. As irregular samplings are common in astronomical surveys, our method also has implications to other studies that involve time series.
 
@@ -28,7 +30,9 @@ Experiments and tests in the paper can be reproduced with the Jupyter notebooks 
 
 As an example, the ground truth v.s. prediction plots of binary microlensing parameters are as follows (taken from the paper):
 
-![](./figs/param.png#pic_center=200x)
+<p align="center">
+<img align="middle" src="./figs/param.png" width="666" />
+</p>
 
 # Training
 Run the scripts [`train_locator.py`](./train_locator.py) and [`train_cde_mdn.py`](./train_cde_mdn.py) to train locator and estimator from scratch. More settings can be specified with additional flags (see the script contents).
