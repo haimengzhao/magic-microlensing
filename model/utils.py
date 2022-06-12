@@ -11,6 +11,15 @@ from matplotlib.offsetbox import AnchoredText
 import MulensModel as mm
 
 def ecdf(x):
+    """Compute the empirical cumulative distribution function of a dataset.
+
+    Args:
+        x (array): Dataset.
+
+    Returns:
+        xval (array): x values where data points are presented.
+        cdf (array): cumulative distribution function values.
+    """
     xnew = np.sort(x)
     xval, cdf = [], []
     for i in range(len(xnew)):
@@ -23,6 +32,20 @@ def ecdf(x):
     return xval, cdf
 
 def get_fsfb(amp, flux, ferr):
+    """Compute the source flux and background flux from the computed magnification and the observed flux.
+
+    Args:
+        amp (array): computed magnification.
+        flux (array): observed flux.
+        ferr (array): observed flux uncertainties.
+
+    Returns:
+        chi2 (float): chi2 value.
+        fs (float): source flux.
+        fb (float): background flux.
+        fserr (float): source flux uncertainty.
+        fberr (float): background flux uncertainty.
+    """
     sig2 = ferr**2
     wght = flux/sig2
     d = np.ones(2)
@@ -43,9 +66,28 @@ def get_fsfb(amp, flux, ferr):
     return chi2,fs,fb,fserr,fberr
 
 def getfsfb(times, iflux, iferr, t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, **kwargs):
-    ''' iflux: data flux values;
-    iferr: data flux uncertainties;
-    iamp: theoretical magnifications. '''
+    """Compute the source flux and background flux from the binary microlensing parameters and the observed flux
+    using MulensModel.
+
+    Args:
+        times (array): time stamps.
+        iflux (array): observed flux.
+        iferr (array): observed flux uncertainties.
+        t_0 (float): t_0.
+        t_E (float): t_E.
+        u_0 (float): u_0.
+        lgrho (float): lg of rho.
+        lgq (float): lg of mass ratio q.
+        lgs (float): lg of seperation s.
+        alpha_180 (float): alpha divided by 180.
+
+    Returns:
+        chi2 (float): chi2 value.
+        fs (float): source flux.
+        fb (float): background flux.
+        fserr (float): source flux uncertainty.
+        fberr (float): background flux uncertainty.
+    """
     parameters = {
             't_0': t_0,
             't_E': t_E,
@@ -78,6 +120,16 @@ def getfsfb(times, iflux, iferr, t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, **kw
     return chi2,fs,fb,fserr,fberr
 
 def infer_lgfs(X, pred, relative_uncertainty=0.03):
+    """Infer the logarithm of the source flux for each light curve in a dataset.
+
+    Args:
+        X (array): dataset with shape (n_light_curves, n_time_stamps, 2).
+        pred (array): prediction of other parameters with shape (n_light_curves, :).
+        relative_uncertainty (float, optional): relative uncertainty of the light curve computed in flux. Defaults to 0.03.
+
+    Returns:
+        pred (array): the input pred appended with the inferred logarithm of the source flux.
+    """
     lgfs = np.zeros((pred.shape[0], 1))
     for i in tqdm(range(pred.shape[0])):
         times = X[i, :, 0]
