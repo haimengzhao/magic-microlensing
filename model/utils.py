@@ -142,6 +142,21 @@ def infer_lgfs(X, pred, relative_uncertainty=0.03):
 
 
 def inference(model, total_size, batch_size, coeffs, device='cpu', full_cov=False, **kwargs):
+    """Infer the posterior distribution of the parameters given the preprocessed light curve dataset.
+
+    Args:
+        model (estimator): the estimator.
+        total_size (int): total size of the dataset.
+        batch_size (int): batch size.
+        coeffs (tensor): preprocessed light curve data, shape (total_size, :).
+        device (str, optional): torch device. Defaults to 'cpu'.
+        full_cov (bool, optional): whether to use diagonal covariance of full covariance Gaussians. Defaults to False.
+
+    Returns:
+        pis (tensor): predicted weights of the Gaussian mixture, shape (total_size, n_components).
+        locs (tensor): predicted means of the Gaussians, shape (total_size, n_components, n_parameters).
+        scales (tensor): predicted variances of the Gaussians, shape (total_size, n_components, n_parameters) if full_cov==False, shape (total_size, n_components, n_parameters, n_parameters) if full_cov==True.
+    """
     num = total_size
     batchsize = batch_size
     n_gaussian = model.n_gaussian
@@ -183,6 +198,22 @@ def get_loglik(pi, loc, scale, x, margin_dim, exp=False, individual_gaussian=Fal
     return loglik
 
 def get_peak_pred(pis, locs, scales, Y, n_step=1000, verbose=False):
+    """Get the global peak and combined marginal closest peak as the prediction of the MDN posterior.
+
+    Args:
+        pis (tensor): weights of the Gaussian mixture, shape (n_light_curves, n_components).
+        locs (tensor): means of the Gaussians, shape (n_light_curves, n_components, n_parameters).
+        scales (tensor): variances of the Gaussians, shape (n_light_curves, n_components, n_parameters) if full_cov==False, shape (n_light_curves, n_components, n_parameters, n_parameters) if full_cov==True.
+        Y (tensor): ground truth, shape (n_light_curves, n_parameters).
+        n_step (int, optional): number of steps when dividing the parameter interval. Defaults to 1000.
+        verbose (bool, optional): whether to print the progress. Defaults to False.
+
+    Returns:
+        pred_global (tensor): global peak, shape (n_light_curves, n_parameters).
+        pred_global_loglik (tensor): global peak log likelihood, shape (n_light_curves, n_parameters).
+        pred_closest (tensor): closest peak, shape (n_light_curves, n_parameters).
+        pred_closest_loglik (tensor): closest peak log likelihood, shape (n_light_curves, n_parameters).
+    """
     num = len(pis); output_dim = locs.shape[-1]
     pred_global = torch.zeros((num, output_dim))
     pred_global_loglik = torch.zeros((num, output_dim))
@@ -223,6 +254,8 @@ def get_peak_pred(pis, locs, scales, Y, n_step=1000, verbose=False):
 def plot_params(num, Y, pred_global, pred_global_loglik, pred_close, pred_close_loglik, 
                 title=None, figsize=(16, 8), labelsize=14, alpha=0.1, save=None,
                 example_groundtruth=np.ones(5)*np.inf, example_pred=np.ones(5)*np.inf):
+    """Plot the predicted v.s. groundtruth parameters.
+    """
     rmse = []
 
     fig = plt.figure(figsize=figsize)
@@ -344,6 +377,27 @@ def plot_params(num, Y, pred_global, pred_global_loglik, pred_close, pred_close_
     
 
 def simulate_lc(t_0, t_E, u_0, lgrho, lgq, lgs, alpha_180, lgfs, relative_uncertainty=0, n_points=1000, orig=False, orig_param=False, tmin=None, tmax=None):
+    """Simulate a with MulensModel.
+
+    Args:
+        t_0 (float): t_0.
+        t_E (float): t_E.
+        u_0 (float): u_0.
+        lgrho (float): lg of rho.
+        lgq (float): lg of q.
+        lgs (float): lg of s.
+        alpha_180 (float): alpha divided by 180.
+        lgfs (float): lg of fs.
+        relative_uncertainty (float, optional): relative uncertainty in flux. Defaults to 0.
+        n_points (int, optional): number of data points to plot. Defaults to 1000.
+        orig (bool, optional): whether to return the original, unpreprocessed light curve. Defaults to False.
+        orig_param (bool, optional): whether the parameters are given in original, unpreproceesed form. Defaults to False.
+        tmin (float, optional): start time of light curve. Defaults to None.
+        tmax (float, optional): end time light curve. Defaults to None.
+
+    Returns:
+        lc: the simulated light curve, shape (n_points, 2).
+    """
     fs = 10**lgfs
     parameters = {
             't_0': t_0,
@@ -432,6 +486,8 @@ def focal_loss(
     return loss
 
 class DiceLoss(nn.Module):
+    """Dice loss.
+    """
     def __init__(self, weight=None, size_average=True):
         super(DiceLoss, self).__init__()
 
@@ -503,10 +559,10 @@ class re_block(nn.Module):
         return x_out          
 
 class UNET_1D(nn.Module):
-    '''
+    '''The 1-dim version of U-Net.
     Ref: https://www.kaggle.com/super13579/u-net-1d-cnn-with-pytorch
     '''
-    def __init__(self ,input_dim,layer_n,kernel_size,depth):
+    def __init__(self, input_dim, layer_n, kernel_size, depth):
         super(UNET_1D, self).__init__()
         self.input_dim = input_dim
         self.layer_n = layer_n
