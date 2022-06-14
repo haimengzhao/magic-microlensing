@@ -30,7 +30,7 @@ Checkpoints of pretrained models can be downloaded at [this url](https://cloud.t
 This includes locator with $k=1/3, 0.75, 1, 1.25, 1.5, 1.75, 2$ and estimator with latent dim 32, nG=12 and diagonal covariance used in the paper.
 
 # Experiments
-Experiments and tests in the paper can be reproduced with the Jupyter notebooks in [the `test` folder](./test/). This folder, along with [the `simulate` folder](./simulate/) also contains additional tests not shown in the paper, which might be useful references for other uses.
+Experiments and tests in the paper can be reproduced with the Jupyter notebooks in [the `test` folder](./test/) (see [this readme file](./test/README.md)). This folder, along with [the `simulate` folder](./simulate/) also contains additional tests not shown in the paper, which might be useful references for other uses.
 
 As an example, the ground truth v.s. prediction plots of binary microlensing parameters are as follows (taken from the paper):
 
