@@ -4,13 +4,15 @@ This repo contains the code for the paper
 
 *MAGIC: Microlensing Analysis Guided by Intelligent Computation*
 
-[url links TODO]()
+[TODO: arxiv link]()
 
 and the extended abstract 
 
 *Parameter Estimation in Realistic Binary Microlensing Light Curves with Neural Controlled Differential Equation*.
 
-All codes implemented in PyTorch.
+at [ICML 2022 Workshop on Machine Learning for Astrophysics](https://ml4astro.github.io/icml2022/).
+
+All codes are implemented in PyTorch.
 
 # Abstract
 
