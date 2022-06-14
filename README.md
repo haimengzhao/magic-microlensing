@@ -1,4 +1,6 @@
-# <center> MAGIC: Microlensing Analysis Guided by Intelligent Computation
+<h1 align='center'>
+MAGIC: Microlensing Analysis Guided by Intelligent Computation
+</h1>
 
 This repo contains the code for the paper 
 
@@ -8,7 +10,7 @@ This repo contains the code for the paper
 
 and the extended abstract 
 
-*Parameter Estimation in Realistic Binary Microlensing Light Curves with Neural Controlled Differential Equation*.
+*Parameter Estimation in Realistic Binary Microlensing Light Curves with Neural Controlled Differential Equation*
 
 at [ICML 2022 Workshop on Machine Learning for Astrophysics](https://ml4astro.github.io/icml2022/).
 
