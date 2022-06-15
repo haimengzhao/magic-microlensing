@@ -27,4 +27,6 @@ Experiments in the extended abstract can be found in [`analysis.ipynb`](./analys
 
 [`plot_triangle.py`](./plot_triangle.py) is a package for drawing contours of a Gaussian mixture.
 
+[`test_embedding.ipynb`](./test_embedding.ipynb) utilizes [the Embedding Projector in Tensorboard](https://www.tensorflow.org/tensorboard/tensorboard_projector_plugin) to visualize the latent space of neural CDE. This enables further exploration like clustering.
+
 Note that the python scripts (ending with `.py`) are normally the massive production version of the coressponding Jupyter notebooks.

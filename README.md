@@ -14,7 +14,7 @@ and the extended abstract
 
 at [ICML 2022 Workshop on Machine Learning for Astrophysics](https://ml4astro.github.io/icml2022/).
 
-All codes are implemented in PyTorch.
+All code are implemented in PyTorch.
 
 # Abstract
 
