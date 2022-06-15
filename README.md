@@ -14,7 +14,7 @@ and the extended abstract
 
 at [ICML 2022 Workshop on Machine Learning for Astrophysics](https://ml4astro.github.io/icml2022/).
 
-All code are implemented in PyTorch.
+All code is implemented in PyTorch.
 
 # Abstract
 
@@ -27,7 +27,7 @@ The modeling of binary microlensing light curves via the standard sampling-based
 # Checkpoints
 Checkpoints of pretrained models can be downloaded at [this url](https://cloud.tsinghua.edu.cn/d/c81144404fbe4f0f89cd/).
 
-This includes locator with $k=1/3, 0.75, 1, 1.25, 1.5, 1.75, 2$ and estimator with latent dim 32, nG=12 and diagonal covariance used in the paper.
+This includes locator with $k=1/3, 0.75, 1, 1.25, 1.5, 1.75, 2$ and estimator with latent dim $32$, $n_G=12$ and diagonal covariance used in the paper.
 
 # Experiments
 Experiments and tests in the paper can be reproduced with the Jupyter notebooks in [the `test` folder](./test/) (see [this readme file](./test/README.md)). This folder, along with [the `simulate` folder](./simulate/) also contains additional tests not shown in the paper, which might be useful references for other uses.
@@ -43,7 +43,14 @@ Run the scripts [`train_locator.py`](./train_locator.py) and [`train_cde_mdn.py`
 
 Before training the models, you might want to simulate some light curves if you haven't got any. Use the script [`simulate/simulate.py`](./simulate/simulate.py) for the simulation. Note that this step is better done on a CPU cluster.
 
-In case you'd like to customize the models for your own works, have a look at [the `model` folder](./model/).
+# Model
+As described in the paper, MAGIC consists of a locator and an estimator. 
+
+The locator is a one-dimensional U-Net, which can be found in [`model/locator.py`](./model/locator.py).
+
+The estimator is composed of [a neural controlled differential equation](https://github.com/patrick-kidger/torchcde) for feature extraction and [a mixture density network](https://github.com/JasonZHM/full-cov-mdn) for posterior modelling. See [`model/cde_mdn.py`](./model/cde_mdn.py).
+
+In case you'd like to customize the models for your own works, you should also have a look at the other files in [the `model` folder](./model/).
 
 # Citation
 If you find our work useful, please give us credit by citing our papers:
