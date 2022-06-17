@@ -4,7 +4,7 @@ MAGIC: Microlensing Analysis Guided by Intelligent Computation
 
 This repo contains the code for the paper 
 
-[*MAGIC: Microlensing Analysis Guided by Intelligent Computation*](https://arxiv.org/abs/2206.08199)
+*MAGIC: Microlensing Analysis Guided by Intelligent Computation* [(arXiv)](https://arxiv.org/abs/2206.08199)
 
 and the extended abstract 
 
@@ -50,7 +50,8 @@ In case you'd like to customize the models for your own works, you should also h
 
 # Citation
 If you find our work useful, please give us credit by citing our paper:
-```
+
+```bibtex
 @misc{zhao2022magic,
     title={{MAGIC: Microlensing Analysis Guided by Intelligent Computation}},
     author={Haimeng Zhao and Wei Zhu},
