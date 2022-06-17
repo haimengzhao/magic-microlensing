@@ -4,17 +4,13 @@ MAGIC: Microlensing Analysis Guided by Intelligent Computation
 
 This repo contains the code for the paper 
 
-*MAGIC: Microlensing Analysis Guided by Intelligent Computation*
-
-[TODO: arxiv link]()
+[*MAGIC: Microlensing Analysis Guided by Intelligent Computation*](https://arxiv.org/abs/2206.08199)
 
 and the extended abstract 
 
 *Parameter Estimation in Realistic Binary Microlensing Light Curves with Neural Controlled Differential Equation*
 
 at [ICML 2022 Workshop on Machine Learning for Astrophysics](https://ml4astro.github.io/icml2022/).
-
-All code is implemented in PyTorch.
 
 # Abstract
 
@@ -53,7 +49,14 @@ The estimator is composed of [a neural controlled differential equation](https:/
 In case you'd like to customize the models for your own works, you should also have a look at the other files in [the `model` folder](./model/).
 
 # Citation
-If you find our work useful, please give us credit by citing our papers:
+If you find our work useful, please give us credit by citing our paper:
 ```
-TODO
+@misc{zhao2022magic,
+    title={{MAGIC: Microlensing Analysis Guided by Intelligent Computation}},
+    author={Haimeng Zhao and Wei Zhu},
+    year={2022},
+    eprint={2206.08199},
+    archivePrefix={arXiv},
+    primaryClass={astro-ph.IM}
+}
 ```
