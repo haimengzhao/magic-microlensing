@@ -20,6 +20,8 @@ import time
 from multiprocessing import Pool
 from functools import partial
 
+from scipy.stats import truncnorm
+
 
 def simulate_lc(
         parameters, time_settings,
@@ -125,12 +127,12 @@ def generate_random_parameter_set(u0_max=1, max_iter=100):
     ''' generate a random set of parameters. '''
 
     # OUTDATED: simulate -2tE to 2tE, with t0=0
-    t_0=0; t_E=1
+    # t_0=0; t_E=1
 
     # new
 
-    # t_E = 10.**random.uniform(0, 1)
-    # t_0 = random.uniform(0 + 3 * t_E, 72 - 3 * t_E)
+    t_E = 10**truncnorm.rvs((np.log10(5)-1.15)/0.45, (np.log10(100)-1.15)/0.45, loc=1.15, scale=0.45)
+    t_0 = random.uniform(-t_E, t_E)
     f_s = 10.**random.uniform(-1, 0)
 
     # rho = 10.**random.uniform(-4, -2) # log-flat between 1e-4 and 1e-2

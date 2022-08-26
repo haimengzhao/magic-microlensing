@@ -77,11 +77,9 @@ def hist2d(x, y, *args, **kwargs):
     return
 
 
-def plot_covariance(params,labels,cov_mat,extents=None,chain=None,fig=None,axes=None,weight=1.0,ground_truth=None,ground_truth_color='r', ground_truth_ls='dashed', color_weight=None):
+def plot_covariance(params,labels,cov_mat,extents=None,chain=None,fig=None,axes=None,weight=1.0,ground_truth=None,ground_truth_color='r', ground_truth_ls='dashed'):
     ''' plot covariance matrix: both theoretical & mcmc chain. '''
     K = len(params)
-    if color_weight is None:
-        color_weight = weight
     if axes is None:
         ## set up axes ##
         factor = 2.0           # size of one side of one panel
@@ -106,7 +104,7 @@ def plot_covariance(params,labels,cov_mat,extents=None,chain=None,fig=None,axes=
         x = np.linspace(extents[i][0],extents[i][1],100)
         p = 1/np.sqrt(2*np.pi)/sigma_x * np.exp(-(x-mu_x)**2/2./sigma_x**2)
         p*= weight
-        ax.plot(x,p,color='%f'%(1-color_weight))
+        ax.plot(x,p,color='%f'%(1-weight))
         if not(chain is None):
             ax.hist(chain[:,i],histtype='step',density=1)
         ax.set_xlim(extents[i])
@@ -147,8 +145,8 @@ def plot_covariance(params,labels,cov_mat,extents=None,chain=None,fig=None,axes=
             x = mu_x + sig1*np.cos(t)*np.cos(alpha) - sig2*np.sin(t)*np.sin(alpha)
             y = mu_y + sig1*np.cos(t)*np.sin(alpha) + sig2*np.sin(t)*np.cos(alpha)
 #            ax.plot(y,x,'k')
-            ax.plot(y,x,color='%f'%(1-color_weight))
-            ax.plot(mu_y,mu_x,'+',color='%f'%(1-color_weight))
+            ax.plot(y,x,color='%f'%(1-weight))
+            ax.plot(mu_y,mu_x,'+',color='%f'%(1-weight))
             if not(ground_truth is None):
                 ax.plot(ground_truth[j], ground_truth[i], marker='+', color=ground_truth_color)
             ## plot error ellipse from mcmc chain ##

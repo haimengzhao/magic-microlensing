@@ -21,7 +21,7 @@ from tensorboardX import SummaryWriter
 
 import matplotlib.pyplot as plt
 
-k = 0.75
+k = 1/3
 
 
 parser = argparse.ArgumentParser('Locator')
@@ -29,17 +29,18 @@ parser.add_argument('--niters', type=int, default=8)
 parser.add_argument('--lr',  type=float, default=4e-3, help="Starting learning rate")
 parser.add_argument('-b', '--batch-size', type=int, default=128)
 
-parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-loc-0.h5', help="Path for dataset")
+parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/KMT-locflux-0.003-0.h5', help="Path for dataset")
 # parser.add_argument('--dataset', type=str, default='/work/hmzhao/irregular-lc/roman-0-8dof.h5', help="Path for dataset")
 parser.add_argument('--save', type=str, default='/work/hmzhao/experiments/locator/', help="Path for save checkpoints")
 parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
 parser.add_argument('--name', type=str, default=None, help="Name of the experiment")
 parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
 parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
+parser.add_argument('--device', type=str, default='cuda:0', help="device")
 
 args = parser.parse_args()
 
-device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
+device = torch.device(args.device if torch.cuda.is_available() else "cpu")
 file_name = os.path.basename(__file__)[:-3]
 utils.makedirs(args.save)
 
@@ -81,9 +82,9 @@ if __name__ == '__main__':
     Y = Y[nanind]
     X = X[nanind]
 
-    ind_smallte = torch.where(Y[:, 1] < 40)[0]
-    Y = Y[ind_smallte]
-    X = X[ind_smallte]
+    # ind_smallte = torch.where(Y[:, 1] < 40)[0]
+    # Y = Y[ind_smallte]
+    # X = X[ind_smallte]
 
     test_size = 1024
     train_size = len(Y) - test_size
@@ -259,9 +260,9 @@ if __name__ == '__main__':
         Y = Y[nanind]
         X = X[nanind]
 
-        ind_smallte = torch.where(Y[:, 1] < 40)[0]
-        Y = Y[ind_smallte]
-        X = X[ind_smallte]
+        # ind_smallte = torch.where(Y[:, 1] < 40)[0]
+        # Y = Y[ind_smallte]
+        # X = X[ind_smallte]
 
         test_size = 1024
         train_size = len(Y) - test_size
