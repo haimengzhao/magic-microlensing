@@ -4,7 +4,7 @@ MAGIC: Microlensing Analysis Guided by Intelligent Computation
 
 This repo contains the code for the paper 
 
-*MAGIC: Microlensing Analysis Guided by Intelligent Computation* [(arXiv)](https://arxiv.org/abs/2206.08199)
+*[MAGIC: Microlensing Analysis Guided by Intelligent Computation](https://iopscience.iop.org/article/10.3847/1538-3881/ac9230)* [(arXiv)](https://arxiv.org/abs/2206.08199)
 
 and the short paper
 
@@ -52,12 +52,14 @@ In case you'd like to customize the models for your own works, you should also h
 If you find our work useful, please give us credit by citing our paper:
 
 ```bibtex
-@misc{zhao2022magic,
-    title={{MAGIC: Microlensing Analysis Guided by Intelligent Computation}},
-    author={Haimeng Zhao and Wei Zhu},
-    year={2022},
-    eprint={2206.08199},
-    archivePrefix={arXiv},
-    primaryClass={astro-ph.IM}
+@article{zhao2022magic,
+  title={MAGIC: Microlensing Analysis Guided by Intelligent Computation},
+  author={Zhao, Haimeng and Zhu, Wei},
+  journal={The Astronomical Journal},
+  volume={164},
+  number={5},
+  pages={192},
+  year={2022},
+  publisher={IOP Publishing}
 }
 ```
