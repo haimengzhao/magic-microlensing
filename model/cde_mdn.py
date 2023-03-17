@@ -21,11 +21,13 @@ class CDEFunc(nn.Module):
 
         self.linear1 = nn.Linear(latent_dim, 1024)
         self.relu1 = nn.PReLU()
-        self.resblocks = nn.Sequential(*[utils.ResBlock(1024, 1024, nonlinear=nn.PReLU, layernorm=False) for i in range(3)])
+        self.resblocks = nn.Sequential(*[utils.ResBlock(1024, 1024, nonlinear=nn.PReLU, layernorm=False) for i in range(8)])
         self.relu2 = nn.PReLU()
         self.linear2 = nn.Linear(1024, input_dim * latent_dim)
+        self.relu3 = nn.PReLU()
+        self.linear3 = nn.Linear(input_dim * latent_dim, 4096)
         self.tanh = nn.Tanh()
-        self.linear3 = nn.Linear(input_dim * latent_dim, input_dim * latent_dim)
+        self.linear4 = nn.Linear(4096, input_dim * latent_dim)
     
     def forward(self, t, z):
         z = self.linear1(z)
@@ -33,8 +35,10 @@ class CDEFunc(nn.Module):
         z = self.resblocks(z)
         z = self.relu2(z)
         z = self.linear2(z)
-        z = self.tanh(z) # important!
+        z = self.relu3(z)
         z = self.linear3(z)
+        z = self.tanh(z) # important!
+        z = self.linear4(z)
 
         z = z.view(z.shape[0], self.latent_dim, self.input_dim)
 
@@ -58,28 +62,27 @@ class CDE_MDN(nn.Module):
             pi (tensor): predicted mixture weights.
             normal (tensor): predicted Gaussians. If dataparallel is True, this is split into loc, scale.
     '''
-    def __init__(self, input_dim, latent_dim, output_dim, n_gaussian=12, dataparallel=False, full_cov=False):
+    def __init__(self, input_dim, latent_dim, output_dim, n_gaussian=12, full_cov=False):
         super(CDE_MDN, self).__init__()
         self.input_dim = input_dim
         self.latent_dim = latent_dim
         self.output_dim = output_dim
         self.n_gaussian = n_gaussian
-        self.dataparallel = dataparallel
         self.full_cov = full_cov
         self.output_feature = False # used to explore the embedding/feature space
 
-        self.cde_func = CDEFunc(input_dim, latent_dim)
-        self.initial = nn.Sequential(
+        self.cde_func = torch.compile(CDEFunc(input_dim, latent_dim))
+        self.initial = torch.compile(nn.Sequential(
             utils.create_net(input_dim, 1024, n_layers=0, n_units=1024, nonlinear=nn.ReLU),
             *[utils.ResBlock(1024, 1024, nonlinear=nn.ReLU, layernorm=False) for i in range(3)],
             utils.create_net(1024, latent_dim, n_layers=0, n_units=1024, nonlinear=nn.ReLU),
-        )
-        self.readout = nn.Sequential(
+        ))
+        self.readout = torch.compile(nn.Sequential(
             utils.create_net(latent_dim, 1024, n_layers=0, n_units=1024, nonlinear=nn.ReLU),
             *[utils.ResBlock(1024, 1024, nonlinear=nn.ReLU, layernorm=False) for i in range(3)],
             nn.Linear(1024, 1024)
-        )
-        self.mdn = mdn.MixtureDensityNetwork(1024, output_dim, self.n_gaussian, full_cov=full_cov)
+        ))
+        self.mdn = torch.compile(mdn.MixtureDensityNetwork(1024, output_dim, self.n_gaussian, full_cov=full_cov))
         # utils.init_network_weights(self.cde_func, nn.init.orthogonal_)
         
     def forward(self, coeffs):
@@ -103,37 +106,5 @@ class CDE_MDN(nn.Module):
 
         z_T = self.readout(z_T)
         pi, normal = self.mdn(z_T)
-
-        if self.dataparallel:
-            return pi.probs, normal.loc, normal.scale
         
         return pi, normal
-    
-    def mdn_loss(self, pi, normal, y):
-        """Calculate MDN loss function.
-
-        Args:
-            pi (nn.distributions.OneHotCategorical): mixture weights.
-            normal (nn.distributions.Normal): Gaussians.
-            y (tensor): target, i.e. the ground truth parameters.
-
-        Returns:
-            loss (tensor): loss averaged on a batch of data.
-        """
-        loglik = normal.log_prob(y.unsqueeze(1).expand_as(normal.loc))
-        loglik = torch.sum(loglik, dim=2)
-        loss = -torch.logsumexp(torch.log(pi.probs) + loglik, dim=1)
-        return loss.mean()
-
-    def sample(self, pi, normal):
-        """Sample from MDN.
-        
-        Args:
-            pi (nn.distributions.OneHotCategorical): mixture weights.
-            normal (nn.distributions.Normal): Gaussians.
-
-        Returns:
-            samples (tensor): one sample for each light curve.
-        """
-        samples = torch.sum(pi.sample().unsqueeze(2) * normal.sample(), dim=1)
-        return samples
