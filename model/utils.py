@@ -10,6 +10,152 @@ import matplotlib.pyplot as plt
 from matplotlib.offsetbox import AnchoredText
 import MulensModel as mm
 
+import h5py
+import torchcde
+import argparse
+
+def mdn_loss(pi, normal, y):
+    """Calculate MDN loss function.
+
+    Args:
+        pi (nn.distributions.OneHotCategorical): mixture weights.
+        normal (nn.distributions.Normal): Gaussians.
+        y (tensor): target, i.e. the ground truth parameters.
+
+    Returns:
+        loss (tensor): loss averaged on a batch of data.
+    """
+    loglik = normal.log_prob(y.unsqueeze(1).expand_as(normal.loc))
+    loglik = torch.sum(loglik, dim=2)
+    loss = -torch.logsumexp(torch.log(pi.probs) + loglik, dim=1)
+    return loss.mean()
+
+def sample(pi, normal):
+    """Sample from MDN.
+
+    Args:
+        pi (nn.distributions.OneHotCategorical): mixture weights.
+        normal (nn.distributions.Normal): Gaussians.
+
+    Returns:
+        samples (tensor): one sample for each light curve.
+    """
+    samples = torch.sum(pi.sample().unsqueeze(2) * normal.sample(), dim=1)
+    return samples
+
+def get_parser():
+    parser = argparse.ArgumentParser('Estimator')
+    parser.add_argument('--niters', type=int, default=50)
+    parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
+    parser.add_argument('-b', '--batch-size', type=int, default=128)
+    parser.add_argument('--dataset', type=str, default='/userhome/training_data/KMT-center-0.h5', help="Path for dataset")
+    parser.add_argument('--save', type=str, default='/userhome/training_ckpt', help="Path for save checkpoints")
+    parser.add_argument('--name', type=str, default='test', help="Name of the experiment")
+    parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
+    parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
+    parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
+    parser.add_argument('-ng', '--ngaussians', type=int, default=12, help="Number of Gaussians in mixture density network")
+    parser.add_argument('-l', '--latents', type=int, default=512, help="Dim of the latent state")
+
+    return parser
+
+def get_next_dataset(data_path):
+    if os.path.exists(data_path[:-4] + str((int(data_path[-4])+1)) + '.h5'):
+        data_path = data_path[:-4] + str((int(data_path[-4])+1)) + '.h5'
+    else:
+        data_path = data_path[:-4] + '0.h5'
+    return data_path
+
+def load_model(model, ckpt_path_load):
+    # Load checkpoint.
+    checkpt = torch.load(ckpt_path_load, map_location='cpu')
+    ckpt_args = checkpt['args']
+    state_dict = checkpt['state_dict']
+    model_dict = model.state_dict()
+
+    # 1. filter out unnecessary keys
+    state_dict = {k: v for k, v in state_dict.items() if ((k in model_dict))}
+    # 2. overwrite entries in the existing state dict
+    model_dict.update(state_dict) 
+    # 3. load the new state dict
+    model.load_state_dict(model_dict)
+    model.to(device)
+    
+    return model
+
+def get_data(data_path, random_shift=False, inject_gap=False):
+    with h5py.File(data_path, mode='r') as dataset_file:
+        X = torch.tensor(dataset_file['X'][...])
+        Y = torch.tensor(dataset_file['Y'][...])
+
+    # filter nan
+    nanind = torch.where(~torch.isnan(X[:, 0, 1]))[0]
+    Y = Y[nanind]
+    X = X[nanind]
+
+    if inject_gap:
+        n_chunks = 25 * 4
+        gap_len = int(500 * 4 / n_chunks)
+        gap_left = torch.randint(0, X.shape[1]-gap_len, (len(X),))
+        X_gap = torch.zeros((X.shape[0], X.shape[1]-gap_len, X.shape[2]))
+        for i in range(len(X)):
+            left, gap, right = torch.split(X[i], [gap_left[i], gap_len, X.shape[1]-gap_left[i]-gap_len], dim=0)
+            lc = torch.vstack([left, right])
+            X_gap[i] = lc
+        X = X_gap
+    
+    if random_shift:
+        # random shift and rescale
+        X[:, :, 0] = X[:, :, 0] + torch.randn(X.shape[0]).reshape(-1, 1) * 0.5
+        X[:, :, 0] = X[:, :, 0] * (1 + torch.randn(X.shape[0]).reshape(-1, 1) * 0.2)
+
+    # # normalize
+    # Y: t_0, t_E, u_0, rho, q, s, alpha, f_s
+    Y = Y[:, 2:] # drop t_0 t_E
+    # 0: u_0, 1: rho, 2: q, 3:s, 4: alpha, 5: f_s
+    Y[:, 1:4] = torch.log10(Y[:, 1:4])
+    Y[:, 5] = torch.log10(Y[:, 5])
+    Y[:, 4] = Y[:, 4] / 180
+    # 0: u_0, 1: lg rho, 2: lg q, 3:lg s, 4: alpha/180, 5: lg f_s
+
+    X = X[:, :, :2] # remove errorbar
+    
+    return X, Y
+    
+def get_CDE_logsig_coeffs(X, depth=3, window_length=5):
+    logsig = torchcde.logsig_windows(X, depth, window_length=window_length)
+    coeffs = torchcde.hermite_cubic_coefficients_with_backward_differences(logsig)
+    return logsig, coeffs
+
+def get_grad_norm(model):
+    total_norm = 0
+    parameters = [p for p in model.parameters() if p.grad is not None and p.requires_grad]
+    for p in parameters:
+        param_norm = p.grad.detach().data.norm(2)
+        total_norm += param_norm.item() ** 2
+    total_norm = total_norm ** 0.5
+    return total_norm
+
+def get_loss_rmse(model, coeffs, y):
+    pi, normal = model(coeffs)
+    loss = mdn_loss(pi, normal, y)
+    pred_y = sample(pi, normal)
+
+    rmse = torch.sqrt(torch.mean((y - pred_y)**2, dim=0)).detach().cpu()
+
+    return loss, rmse
+    
+def log_loss_rmse(accelerator, name, loss, rmse, step):
+    accelerator.log({
+        f'{name}/loss': loss.item(),
+        f'{name}/rmse_u0': rmse[0],
+        f'{name}/rmse_rho': rmse[1],
+        f'{name}/rmse_lgq': rmse[2],
+        f'{name}/rmse_lgs': rmse[3],
+        f'{name}/rmse_alpha_180': rmse[4],
+        f'{name}/rmse_lgfs': rmse[5],
+    }, step=step)
+
 def ecdf(x):
     """Compute the empirical cumulative distribution function of a dataset.
 
