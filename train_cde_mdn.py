@@ -1,6 +1,7 @@
 import os
 import sys
 import gc
+import resource
 
 import argparse
 import numpy as np
@@ -65,7 +66,7 @@ if __name__ == '__main__':
     accelerator.print(f'logsig last dim std: {torch.std(train_logsig[:, :, -1])}')
 
     train_dataset = torch.utils.data.TensorDataset(train_coeffs, Y[:train_size])
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
+    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
 
     test_logsig, test_coeffs = utils.get_CDE_logsig_coeffs(X[(-test_size):, :, :].float().to(device), depth, window_length)
     test_Y = Y[(-test_size):].float().to(device)
@@ -74,8 +75,7 @@ if __name__ == '__main__':
     input_dim = train_logsig.shape[-1]
     latent_dim = args.latents
     
-    del Y
-    del X
+    del X, Y, train_logsig, train_coeffs, test_logsig
     gc.collect()
     
     ##################################################################
@@ -100,6 +100,8 @@ if __name__ == '__main__':
     )
 
     for epoch in range(args.resume, args.resume + args.niters):
+        accelerator.print(f'Max Memory Used per Process: {float(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)/1024/1024:.2f} GB')
+        
         utils.update_learning_rate(optimizer, decay_rate = 0.9, lowest = args.lr / 100)
         lr = optimizer.state_dict()['param_groups'][0]['lr']
         accelerator.print(f'Epoch {epoch}, Learning Rate {lr}')
@@ -120,12 +122,12 @@ if __name__ == '__main__':
             if accelerator.sync_gradients:
                 accelerator.clip_grad_value_(model.parameters(), 20)
             total_norm = utils.get_grad_norm(model)
-            accelerator.log({'gradient_norm': total_norm}, step=(epoch + i / num_batches))
+            accelerator.log({'gradient_norm': total_norm}, step=(epoch * num_batches + i))
 
             optimizer.step()
 
             print(f'Epoch {(epoch + i / num_batches):.2f}, Training loss {loss.item()}, rmse {rmse.tolist()}')
-            utils.log_loss_rmse(accelerator, 'training', loss, rmse, epoch + i / num_batches)
+            utils.log_loss_rmse(accelerator, 'training', loss, rmse, (epoch * num_batches + i))
 
             if accelerator.is_main_process:
                 if (i + epoch * num_batches) % 20 == 0:
@@ -139,8 +141,8 @@ if __name__ == '__main__':
                     with torch.no_grad():
                         loss, rmse = utils.get_loss_rmse(model, test_coeffs, test_Y)
 
-                        print(f'Epoch {(epoch + i / num_batches):.2f}, Test Loss {loss.item()}, rmse {rmse.tolist()}'）
-                        utils.log_loss_rmse(accelerator, 'test', loss, rmse, epoch + i / num_batches)
+                        print(f'Epoch {(epoch + i / num_batches):.2f}, Test Loss {loss.item()}, rmse {rmse.tolist()}')
+                        utils.log_loss_rmse(accelerator, 'test', loss, rmse, (epoch * num_batches + i))
 
                     model.train()
         
@@ -154,12 +156,12 @@ if __name__ == '__main__':
         train_logsig, train_coeffs = utils.get_CDE_logsig_coeffs(X, depth, window_length)
 
         train_dataset = torch.utils.data.TensorDataset(train_coeffs, Y)
-        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
+        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
 
-        del Y
-        del X
+        del X, Y, train_logsig, train_coeffs
         gc.collect()
         
+        accelerator._dataloaders = []
         train_dataloader = accelerator.prepare(
             train_dataloader
         )
