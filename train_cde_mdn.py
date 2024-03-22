@@ -26,7 +26,7 @@ parser = utils.get_parser()
 args = parser.parse_args()
 
 utils.makedirs(args.save)
-os.environ['JOBLIB_TEMP_FOLDER'] = '/userhome/tmp'
+os.environ['JOBLIB_TEMP_FOLDER'] = '/work/hmzhao/tmp'
 
 #####################################################################################################
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
     ckpt_path = os.path.join(args.save, "estimator_" + str(experimentID) + '.ckpt')
     ckpt_path_load = os.path.join(args.save, "estimator_" + str(args.load) + '.ckpt')
 
-    accelerator = Accelerator(log_with="tensorboard", project_dir=f'/userhome/training_log/')
+    accelerator = Accelerator(log_with="tensorboard", project_dir=f'/work/hmzhao/training_log/')
     device = accelerator.device
     accelerator.print(f'ExperimentID: {experimentID}')
     accelerator.print(f'Num of GPUs available: {torch.cuda.device_count()}')

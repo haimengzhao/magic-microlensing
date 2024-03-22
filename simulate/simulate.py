@@ -2,16 +2,22 @@
 from https://github.com/rpoleski/MulensModel/blob/master/examples/example_18_simulate.py
 and https://github.com/LRayleighJ/MDN_lc_iden/blob/main/simudata/gen_simu.py
 
+BinaryJax from https://github.com/CoastEgo/BinaryJax
+
 Script for simulating microlensing lightcurves.
 
 NB: output mag = 22 - 2.5lg(flux)
 """
 import os
 import numpy as np
+import jax.numpy as jnp
+import jax
 import matplotlib.pyplot as plt
 import sys
 
 import MulensModel as mm
+from BinaryJax import model
+os.environ["CUDA_VISIBLE_DEVICES"]="" 
 
 import random
 import h5py
@@ -24,115 +30,96 @@ from scipy.stats import truncnorm
 
 
 def simulate_lc(
-        parameters, time_settings,
-        coords=None, methods=None,
-        flux_source=1000., flux_blending=0.,
-        relative_uncertainty=0.01,
-        plot=True):
+        parameters, n_points, t_start, t_stop,
+        relative_uncertainty=0.01
+        ):
     """
     Simulate and save light curve.
 
     Parameters :
         parameters: *dict*
-            Parameters of the model - keys are in MulensModel format, e.g.,
-            't_0', 'u_0', 't_E' etc.
-
-        time_settings: *dict*
-            Sets properties of time vector. It requires key `type`, which can
-            have one of two values:
-            - `random` (requires `n_epochs`, `t_start`, and `t_stop`) or
-            - `evenly spaced` (settings passed to `Model.set_times()`).
-
-        coords: *str*
-            Event coordinates for parallax calculations, e.g.,
-            "17:34:51.15 -30:29:28.27".
-
-        methods: *list*
-            Define methods used to calculate magnification. The format is
-            the same as MulensModel.Model.set_magnification_methods().
-
-        flux_source: *float*
-            Flux of source.
-
-        flux_blending: *float*
-            Blending flux.
+            Parameters of the model - keys are in MulensModel format, 
+            t_0, t_E, u_0, rho, q, s, alpha, f_s.
+            
+        n_points: *int*
+            Number of points to simulate.
+        
+        t_start: *float*
+            Start time of the observation.
+        
+        t_stop: *float*
+            End time of the observation.
 
         relative_uncertainty: *float*
             Relative uncertainty of the simulated data (this is close to
             sigma in magnitudes).
 
-        plot: *bool*
-            Plot the data and model at the end?
-
     """
-    try:
-        model = mm.Model(parameters, coords=coords)
+    # try:
+    raw = np.random.rand(n_points)
+    dt = t_stop - t_start
+    times = t_start + np.sort(raw) * dt
 
-        if time_settings['type'] == 'random':
-            raw = np.random.rand(time_settings['n_epochs'])
-            dt = time_settings['t_stop'] - time_settings['t_start']
-            times = time_settings['t_start'] + np.sort(raw) * dt
-        elif time_settings['type'] == 'evenly spaced':
-            times = model.set_times(t_start=time_settings['t_start'],
-                                        t_stop=time_settings['t_stop'],
-                                        n_epochs=time_settings['n_epochs'])
-        else:
-            raise ValueError("unrecognized time_settings['type']: " +
-                            time_settings['type'])
+        # magnification = model.get_magnification(times)
 
-        if methods is not None:
-            model.set_magnification_methods(methods)
+        # flux = flux_source * magnification + flux_blending
+        # flux_err = relative_uncertainty * flux
 
-        magnification = model.get_magnification(times)
+        # flux *= 1 + relative_uncertainty * np.random.randn(len(flux))
 
-        flux = flux_source * magnification + flux_blending
-        flux_err = relative_uncertainty * flux
+        # data = mm.MulensData([times, flux, flux_err], phot_fmt='flux')
+        
+    def microlensing_model(t_0, t_E, u_0, rho, q, s, alpha, f_s, times):
+        dic = {'t_0': t_0, 'u_0': u_0, 't_E': t_E, 'rho': rho, 'q': q, 's': s, 'alpha_deg': alpha, 'times': times, 'retol': 1e-2}
+        magnification = model(**dic)
+        flux = 1000 * magnification + 1000 * (1-f_s)/f_s
+        magnitudes = -2.5 * jnp.log10(flux)
+        return magnitudes
 
-        flux *= 1 + relative_uncertainty * np.random.randn(len(flux))
+    mag_model = microlensing_model(**parameters, times=times)
+    mag_errors = jnp.ones_like(mag_model) * relative_uncertainty
+    mag_data = np.random.normal(mag_model, mag_errors)
+    data = mm.MulensData([times, mag_data, mag_errors], phot_fmt='mag')
 
-        data = mm.MulensData([times, flux, flux_err], phot_fmt='flux')
-        # event = mm.Event([data], model)
-        # print("chi^2: {:.2f}".format(event.get_chi2()))
+    ## compute the gradients ##
+    microlensing_model_grad = jax.jacfwd(microlensing_model, argnums=(0, 1, 2, 3, 4, 5, 6, 7))
+    mag_grad = jnp.array(microlensing_model_grad(parameters['t_0'], parameters['t_E'], parameters['u_0'], parameters['rho'], parameters['q'], parameters['s'], parameters['alpha'], parameters['f_s'], times))
 
-        # np.savetxt(file_out,
-        #            np.array([times, data.mag, data.err_mag]).T,
-        #            fmt='%.4f')
+    ## compute the Fisher matrix ##
+    # ndim = mag_grad.shape[0]
+    # Fmat = jnp.zeros((ndim, ndim))
+    # for i in range(ndim):
+    #     for j in range(ndim):
+    #         Fmat[i, j] = jnp.sum(mag_grad[i] * mag_grad[j]/mag_errors**2)
+    # einsum
+    Fmat = jnp.einsum('in,jn->ij', mag_grad, mag_grad/mag_errors**2)
+    
+    single = mm.Model({'t_0': parameters['t_0'], 'u_0': parameters['u_0'], 't_E': parameters['t_E']})
+    event_single = mm.Event([data], single)
+    chi2 = event_single.get_chi2()
+    # print("chi^2 single: {:.2f}".format(chi2))
 
-        if plot:
-            model.plot_lc(t_start=np.min(times), t_stop=np.max(times),
-                        source_flux=flux_source, blend_flux=flux_blending)
-            data.plot(phot_fmt='mag')
-            # plt.savefig('./test.png')
-            plt.show()
-
-        if time_settings['type'] == 'random':
-            single = mm.Model({'t_0': parameters['t_0'], 'u_0': parameters['u_0'], 't_E': parameters['t_E']})
-            event_single = mm.Event([data], single)
-            chi2 = event_single.get_chi2()
-            # print("chi^2 single: {:.2f}".format(chi2))
-
-            if chi2 > 1000:
-                # plt.plot(data.mag+np.log10(flux)*2.5)
-                # plt.show()
-                return np.stack([times, data.mag, data.err_mag], axis=-1).reshape(1, -1, 3)
-            else: 
-                return None
-        else:
-            return np.stack([times, data.mag], axis=-1).reshape(1, -1, 2)
-    except:
-        print('Error occurred, but continue')
-        return None
+    if chi2 > 1000:
+        # plt.plot(data.mag+np.log10(flux)*2.5)
+        # plt.show()
+        return np.stack([times, data.mag, data.err_mag], axis=-1).reshape(1, -1, 3), Fmat
+    else: 
+        return None, None
+    # except:
+    #     print('Error occurred, but continue')
+    #     return None, None
 
 def generate_random_parameter_set(u0_max=1, max_iter=100):
     ''' generate a random set of parameters. '''
 
-    # OUTDATED: simulate -2tE to 2tE, with t0=0
-    # t_0=0; t_E=1
+    # fix t_0, t_E
+    t_0 = 0.; t_E = 1.
 
-    # new
-
-    t_E = 10**truncnorm.rvs((np.log10(5)-1.15)/0.45, (np.log10(100)-1.15)/0.45, loc=1.15, scale=0.45)
-    t_0 = random.uniform(-t_E, t_E)
+    # random t_0, t_E
+    # t_E = 10**truncnorm.rvs((np.log10(5)-1.15)/0.45, (np.log10(100)-1.15)/0.45, loc=1.15, scale=0.45)
+    # t_0 = random.uniform(-t_E, t_E)
+    
+    # f_s
     f_s = 10.**random.uniform(-1, 0)
 
     # rho = 10.**random.uniform(-4, -2) # log-flat between 1e-4 and 1e-2
@@ -176,92 +163,61 @@ def generate_random_parameter_set(u0_max=1, max_iter=100):
         'q': q, 
         's': s, 
         'alpha': alpha,
-    }, f_s
+        'f_s': f_s,
+    }
 
-def simulate_batch(batch_size, relative_uncertainty, time_settings_random, time_settings_even, methods, log_path, b):
+def simulate_batch(batch_size, relative_uncertainty, n_points, t_start, t_stop, log_path, save_path, b):
     '''
     Simulate a batch of lightcurves
 
     Save to file:
 
-        X_random: randomly sampled lightcurve
-
-        X_even: evenly densely sampled lightcurve, as ground truth lightcurve
+        X: lightcurve
 
         Y: parameters
+        
+        F: Fisher matrices
 
     '''
     log = open(log_path, 'a')
     time_start = time.time()
-    X_random = np.empty((batch_size, time_settings_random['n_epochs'], 3))
-    if time_settings_even is not None:
-        X_even = np.empty((batch_size, time_settings_even['n_epochs'], 2))
+    X = np.empty((batch_size, n_points, 3))
     Y = np.empty((batch_size, 8))
+    F = np.empty((batch_size, 8, 8))
     # t_0, t_E, u_0, rho, q, s, alpha, f_s
     num_lc = 0
 
     print(f'Simulating batch {b}:\n' + '#'*50 + '\n')
+    log.write(f'Simulating batch {b}:\n' + '#'*50 + '\n')
+    # log save_path
+    print(f'Saving to {save_path}\n')
+    log.write(f'Saving to {save_path}\n')
+    
     pbar = tqdm(total=100)
     while num_lc < batch_size:
         # print(num_lc)
-        parameters, f_s= generate_random_parameter_set()
-        Y[num_lc] = list(parameters.values()) + [f_s]
+        parameters= generate_random_parameter_set()
+        Y[num_lc] = list(parameters.values())
 
-        settings_random = {
-            'parameters': parameters,
-            'time_settings': time_settings_random,
-            'methods': methods,
-        }
+        lc, Fmat = simulate_lc(parameters, n_points, t_start, t_stop, relative_uncertainty)
 
-        settings_even = {
-            'parameters': parameters,
-            'time_settings': time_settings_even,
-            'methods': methods,
-        }
+        if type(lc) == np.ndarray:
+            X[num_lc] = lc
+            F[num_lc] = Fmat
+            num_lc += 1
 
-        lc_random = simulate_lc(**settings_random, 
-            flux_source=1000, flux_blending=1000*(1-f_s)/f_s, relative_uncertainty=relative_uncertainty, plot=False)
-
-        if type(lc_random) == np.ndarray:
-            lc_even = None
-            if time_settings_even is not None:
-                lc_even = simulate_lc(**settings_even, 
-                    flux_source=1000, flux_blending=1000*(1-f_s)/f_s, relative_uncertainty=0, plot=False)
-                if type(lc_even) == np.ndarray:
-                    X_even[num_lc] = lc_even
-            if type(lc_even) == np.ndarray or time_settings_even is None:
-                X_random[num_lc] = lc_random
-                num_lc += 1
-
-            # ABANDONED: resample
-            # if num_resample > 0:
-            #     for i in range(num_resample - 1):
-            #         if (num_lc / batch_size * 1000) % 10 == 0:
-            #             pbar.update()
-            #         Y[num_lc] = list(parameters.values())
-            #         lc = simulate_lc(**settings, plot=False)
-            #         X[num_lc] = lc
-            #         num_lc += 1
-            # else:
-            #     if (num_lc / batch_size * 1000) % 10 == 0:
-            #         pbar.update()
-
-            if (num_lc / batch_size * 1000) % 10 == 0:
-                    pbar.update()
+        if (num_lc / batch_size * 1000) % 10 == 0:
+            pbar.update()
 
     pbar.close()
 
-    with h5py.File(f'/work/hmzhao/irregular-lc/KMT-{b}-fixrho-mp.h5', 'w') as opt:
-        if time_settings_even is not None:
-            opt['X_random'] = X_random
-            opt['X_even'] = X_even
-            opt['Y'] = Y
-        else:
-            opt['X'] = X_random
-            opt['Y'] = Y
+    with h5py.File(save_path + f'lc-{b}.h5', 'w') as opt:
+        opt['X'] = X
+        opt['Y'] = Y
+        opt['F'] = F
     
     time_end = time.time()
-    log.write(f'batch {b} stored in /work/hmzhao/irregular-lc/KMT-{b}-fixrho-mp.h5, size {batch_size}, use time: {time_end - time_start}s\n')
+    log.write(f'batch {b} stored, size {batch_size}, use time: {time_end - time_start}s\n')
     log.close()
 
         
@@ -274,37 +230,23 @@ if __name__ == '__main__':
     batch_size = int(sys.argv[1])
     num_of_batch = int(sys.argv[2])
     num_of_cpus = int(sys.argv[3])
-    # num_of_resample = int(sys.argv[4])
-    log_path = sys.argv[4]
+    log_path = './log.log'
+    save_path = '/work/hmzhao/data/'
+    os.makedirs(save_path, exist_ok=True)
 
-    num_of_points_perlc_random = int(500)
-    # num_of_points_perlc_even = int(200)
-    t_0 = 0; t_E = 1; 
-    t_start = t_0-2*t_E; t_stop = t_0+2*t_E; 
+    n_points = int(500)
+    t_start = -2; t_stop = 2; 
     relative_uncertainty = 0.03; 
-
-    time_settings_random = {
-            'type': 'random',
-            'n_epochs': num_of_points_perlc_random,
-            't_start': t_start,
-            't_stop': t_stop,
-        }
-    # time_settings_even = {
-    #         'type': 'evenly spaced',
-    #         'n_epochs': num_of_points_perlc_even,
-    #         't_start': t_start,
-    #         't_stop': t_stop,
-    #     }
-    methods = [t_start, 'VBBL', t_stop]
-
+    
     log = open(log_path, 'w')
     log.write(f'Simulating {num_of_batch} batches of {batch_size} lightcurves\n'+'#'*20+'\n')
     log.close()
 
-    pool = Pool(num_of_cpus)
-    pool.map(partial(simulate_batch, batch_size, relative_uncertainty, 
-                        time_settings_random, None,
-                        methods, log_path), 
-                range(num_of_batch))
+    # pool = Pool(num_of_cpus)
+    # pool.map(partial(simulate_batch, batch_size, relative_uncertainty, 
+    #             n_points, t_start, t_stop, log_path, save_path),
+    #          range(num_of_batch))
+    simulate_batch(batch_size, relative_uncertainty, 
+                n_points, t_start, t_stop, log_path, save_path, 0)
 
     print('#'*50+f'\nSimulation program end at {time.time()}\n'+'#'*50)
