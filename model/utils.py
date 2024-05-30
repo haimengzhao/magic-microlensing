@@ -14,6 +14,41 @@ import h5py
 import torchcde
 import argparse
 
+def mdn_loss_fisher(pi, normal, y, fisher, n_sample=1024):
+    """Calculate MDN loss function given the fisher matrix that induce a Gaussian distribution around y.
+
+    Args:
+        pi (nn.distributions.OneHotCategorical): mixture weights.
+        normal (nn.distributions.Normal): Gaussians.
+        y (tensor): target, i.e. the ground truth parameters.
+        fisher (tensor): Fisher information matrix.
+        n_sample (int, optional): number of samples to estimate the loss. Defaults to 1024.
+
+    Returns:
+        loss (tensor): loss averaged on a batch of data.
+    """
+    # sample from the Gaussian distribution induced by the fisher matrix
+    # check positive definite
+    # min_eig = torch.linalg.eigvalsh(fisher).min()
+    # print('min_eig of fisher', min_eig)
+    
+    # WATCH OUT: manually calculating covariance matrix
+    # directly using precision matrix with very large entries 
+    # will result in negative eigenvalues when calculating covariance 
+    # matrix due to numerical instability
+    
+    cov = torch.linalg.inv(fisher)
+    cov += torch.eye(cov.shape[-1], device=cov.device)
+    # min_eig = torch.linalg.eigvalsh(cov).min()
+    # print('min_eig of cov', min_eig)
+    dist_fisher = torch.distributions.MultivariateNormal(y, covariance_matrix=cov)
+    y_sample = dist_fisher.sample((n_sample,)) # (n_sample, batch_size, n_parameters)
+    # duplicate the mixture weights and Gaussians
+    loglik = normal.log_prob(y_sample.unsqueeze(2).expand_as(torch.tile(normal.loc.unsqueeze(0), (n_sample, 1, 1, 1))))
+    loglik = torch.sum(loglik, dim=-1)
+    loss = -torch.logsumexp(torch.log(pi.probs) + loglik, dim=-1)
+    return loss.mean()
+
 def mdn_loss(pi, normal, y):
     """Calculate MDN loss function.
 
@@ -48,7 +83,7 @@ def get_parser():
     parser.add_argument('--niters', type=int, default=50)
     parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
     parser.add_argument('-b', '--batch-size', type=int, default=128)
-    parser.add_argument('--dataset', type=str, default='/work/hmzhao/training_data/KMT-0.h5', help="Path for dataset")
+    parser.add_argument('--dataset', type=str, default='/work/hmzhao/data/data-0.h5', help="Path for dataset")
     parser.add_argument('--save', type=str, default='/work/hmzhao/training_ckpt', help="Path for save checkpoints")
     parser.add_argument('--name', type=str, default='test', help="Name of the experiment")
     parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
@@ -66,7 +101,7 @@ def get_next_dataset(data_path):
         data_path = data_path[:-4] + '0.h5'
     return data_path
 
-def load_model(model, ckpt_path_load):
+def load_model(model, ckpt_path_load, device):
     # Load checkpoint.
     checkpt = torch.load(ckpt_path_load, map_location='cpu')
     ckpt_args = checkpt['args']
@@ -83,15 +118,28 @@ def load_model(model, ckpt_path_load):
     
     return model
 
-def get_data(data_path, random_shift=False, inject_gap=False):
+def get_data(data_path, random_shift=False, inject_gap=False, fisher=False):
     with h5py.File(data_path, mode='r') as dataset_file:
         X = torch.tensor(dataset_file['X'][...])
         Y = torch.tensor(dataset_file['Y'][...])
+        if fisher:
+            F = torch.tensor(dataset_file['F'][...])
 
     # filter nan
     nanind = torch.where(~torch.isnan(X[:, 0, 1]))[0]
     Y = Y[nanind]
     X = X[nanind]
+    F = F[nanind]
+    
+    # make F postive definite
+    # min_eig = torch.linalg.eigvalsh(F).min()
+    # print('min_eig', min_eig)
+    # if min_eig <= 0:
+    # F = F + (-min_eig + 1) * torch.eye(F.shape[-1])
+    F += torch.eye(F.shape[-1]) * 10
+    # print(F.shape, torch.linalg.eigvalsh(F).shape)
+    min_eig = torch.linalg.eigvalsh(F).min()
+    print('min_eig', min_eig)
 
     if inject_gap:
         n_chunks = 25 * 4
@@ -112,6 +160,7 @@ def get_data(data_path, random_shift=False, inject_gap=False):
     # # normalize
     # Y: t_0, t_E, u_0, rho, q, s, alpha, f_s
     Y = Y[:, 2:] # drop t_0 t_E
+    F = F[:, 2:, 2:] # drop t_0 t_E
     # 0: u_0, 1: rho, 2: q, 3:s, 4: alpha, 5: f_s
     Y[:, 1:4] = torch.log10(Y[:, 1:4])
     Y[:, 5] = torch.log10(Y[:, 5])
@@ -120,6 +169,8 @@ def get_data(data_path, random_shift=False, inject_gap=False):
 
     X = X[:, :, :2] # remove errorbar
     
+    if fisher:
+        return X, Y, F
     return X, Y
     
 def get_CDE_logsig_coeffs(X, depth=3, window_length=5):
@@ -136,9 +187,12 @@ def get_grad_norm(model):
     total_norm = total_norm ** 0.5
     return total_norm
 
-def get_loss_rmse(model, coeffs, y):
+def get_loss_rmse(model, coeffs, y, fisher=None, n_sample=1024):
     pi, normal = model(coeffs)
-    loss = mdn_loss(pi, normal, y)
+    if fisher is not None:
+        loss = mdn_loss_fisher(pi, normal, y, fisher, n_sample)
+    else:
+        loss = mdn_loss(pi, normal, y)
     pred_y = sample(pi, normal)
 
     rmse = torch.sqrt(torch.mean((y - pred_y)**2, dim=0)).detach().cpu()

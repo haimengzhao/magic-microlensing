@@ -49,12 +49,14 @@ if __name__ == '__main__':
     ##################################################################
     # Load data
     accelerator.print(f'Loading Data: {args.dataset}')
-    X, Y = utils.get_data(args.dataset)
+    X, Y, F = utils.get_data(args.dataset, fisher=True)
+    n_sample = 10
     
     mean_y = torch.mean(Y, axis=0)
     std_y = torch.std(Y, axis=0)
     accelerator.print(f'Y mean: {mean_y}\nY std: {std_y}')
     accelerator.print(f'X mean: {torch.mean(X[:, :, 1])}\nX std: {torch.mean(torch.std(X[:, :, 1], axis=0))}')
+    accelerator.print(f'F mean: {torch.mean(F, axis=0)}\nF std: {torch.std(F, axis=0)}')
     
     test_size = 4096
     train_size = len(Y) - test_size
@@ -65,17 +67,18 @@ if __name__ == '__main__':
     train_logsig, train_coeffs = utils.get_CDE_logsig_coeffs(X[:train_size, :, :], depth, window_length)
     accelerator.print(f'logsig last dim std: {torch.std(train_logsig[:, :, -1])}')
 
-    train_dataset = torch.utils.data.TensorDataset(train_coeffs, Y[:train_size])
+    train_dataset = torch.utils.data.TensorDataset(train_coeffs, Y[:train_size], F[:train_size])
     train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
 
     test_logsig, test_coeffs = utils.get_CDE_logsig_coeffs(X[(-test_size):, :, :].float().to(device), depth, window_length)
     test_Y = Y[(-test_size):].float().to(device)
+    test_F = F[(-test_size):].float().to(device)
 
     output_dim = Y.shape[-1]
     input_dim = train_logsig.shape[-1]
     latent_dim = args.latents
     
-    del X, Y, train_logsig, train_coeffs, test_logsig
+    del X, Y, F, train_logsig, train_coeffs, test_logsig
     gc.collect()
     
     ##################################################################
@@ -86,7 +89,7 @@ if __name__ == '__main__':
     ##################################################################
     # Load checkpoint and evaluate the model
     if args.load is not None:
-        model = utils.load_model(model, ckpt_path_load)
+        model = utils.load_model(model, ckpt_path_load, device)
     ##################################################################
     # Training
     accelerator.print('Start Training')
@@ -107,15 +110,16 @@ if __name__ == '__main__':
         accelerator.print(f'Epoch {epoch}, Learning Rate {lr}')
         accelerator.log({'learning_rate': lr}, step=epoch)
             
-        for i, (batch_coeffs, batch_y) in enumerate(train_dataloader):
+        for i, (batch_coeffs, batch_y, batch_F) in enumerate(train_dataloader):
 
             batch_y = batch_y.float().to(device)
             batch_coeffs = batch_coeffs.float().to(device)
+            batch_F = batch_F.float().to(device)
 
             optimizer.zero_grad()
             
             with accelerator.autocast():
-                loss, rmse = utils.get_loss_rmse(model, batch_coeffs, batch_y)
+                loss, rmse = utils.get_loss_rmse(model, batch_coeffs, batch_y, batch_F, n_sample=n_sample)
 
             accelerator.backward(loss)
 
@@ -139,7 +143,7 @@ if __name__ == '__main__':
                     print(f'Model saved to {ckpt_path}')
 
                     with torch.no_grad():
-                        loss, rmse = utils.get_loss_rmse(model, test_coeffs, test_Y)
+                        loss, rmse = utils.get_loss_rmse(model, test_coeffs, test_Y, test_F, n_sample=n_sample)
 
                         print(f'Epoch {(epoch + i / num_batches):.2f}, Test Loss {loss.item()}, rmse {rmse.tolist()}')
                         utils.log_loss_rmse(accelerator, 'test', loss, rmse, (epoch * num_batches + i))
@@ -150,15 +154,15 @@ if __name__ == '__main__':
         args.dataset = utils.get_next_dataset(args.dataset)
         
         accelerator.print(f'Loading Data: {args.dataset}')
-        X, Y = utils.get_data(args.dataset)
-            
+        X, Y, F = utils.get_data(args.dataset, fisher=True)
+
         # CDE interpolation with log_sig
         train_logsig, train_coeffs = utils.get_CDE_logsig_coeffs(X, depth, window_length)
 
-        train_dataset = torch.utils.data.TensorDataset(train_coeffs, Y)
+        train_dataset = torch.utils.data.TensorDataset(train_coeffs, Y[:train_size], F[:train_size])
         train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
 
-        del X, Y, train_logsig, train_coeffs
+        del X, Y, F, train_logsig, train_coeffs
         gc.collect()
         
         accelerator._dataloaders = []
