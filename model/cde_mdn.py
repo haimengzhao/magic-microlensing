@@ -21,7 +21,7 @@ class CDEFunc(nn.Module):
 
         self.linear1 = nn.Linear(latent_dim, 1024)
         self.relu1 = nn.PReLU()
-        self.resblocks = nn.Sequential(*[utils.ResBlock(1024, 1024, nonlinear=nn.PReLU, layernorm=False) for i in range(8)])
+        self.resblocks = nn.Sequential(*[utils.ResBlock(1024, 1024, nonlinear=nn.PReLU, layernorm=False) for i in range(3)])
         self.relu2 = nn.PReLU()
         self.linear2 = nn.Linear(1024, input_dim * latent_dim)
         self.relu3 = nn.PReLU()
@@ -96,7 +96,7 @@ class CDE_MDN(nn.Module):
                               func=self.cde_func,
                               t=X.interval,
                               adjoint=False,
-                              method="dopri5", rtol=1e-3, atol=1e-5)
+                              method="fixed_adams", rtol=1e-3, atol=1e-5)
         # changing (rtol, atol) from (1e-5, 1e-7) to (1e-3, 1e-5) can speed up 4x with indistinguishable performance
 
         z_T = z_T[:, -1]

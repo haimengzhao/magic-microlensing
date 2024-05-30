@@ -36,9 +36,13 @@ def mdn_loss_fisher(pi, normal, y, fisher, n_sample=1024):
     # directly using precision matrix with very large entries 
     # will result in negative eigenvalues when calculating covariance 
     # matrix due to numerical instability
+    # Adding a too large shift to cov will lead
+    # to large loss because of larger spread of the Gaussian
     
     cov = torch.linalg.inv(fisher)
-    cov += torch.eye(cov.shape[-1], device=cov.device)
+    min_eig = torch.linalg.eigvalsh(cov).min()
+    cov += torch.eye(cov.shape[-1], device=cov.device) * (-min_eig + 1e-6)
+    # print(cov.mean)
     # min_eig = torch.linalg.eigvalsh(cov).min()
     # print('min_eig of cov', min_eig)
     dist_fisher = torch.distributions.MultivariateNormal(y, covariance_matrix=cov)
@@ -90,7 +94,7 @@ def get_parser():
     parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
     parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
     parser.add_argument('-ng', '--ngaussians', type=int, default=12, help="Number of Gaussians in mixture density network")
-    parser.add_argument('-l', '--latents', type=int, default=512, help="Dim of the latent state")
+    parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the latent state")
 
     return parser
 
@@ -132,14 +136,14 @@ def get_data(data_path, random_shift=False, inject_gap=False, fisher=False):
     F = F[nanind]
     
     # make F postive definite
+    min_eig = torch.linalg.eigvalsh(F).min()
+    # print('min_eig', min_eig)
+    if min_eig <= 0:
+        F = F + (-min_eig + 1) * torch.eye(F.shape[-1])
+    # F += torch.eye(F.shape[-1]) * 10
+    # print(F.shape, torch.linalg.eigvalsh(F).shape)
     # min_eig = torch.linalg.eigvalsh(F).min()
     # print('min_eig', min_eig)
-    # if min_eig <= 0:
-    # F = F + (-min_eig + 1) * torch.eye(F.shape[-1])
-    F += torch.eye(F.shape[-1]) * 10
-    # print(F.shape, torch.linalg.eigvalsh(F).shape)
-    min_eig = torch.linalg.eigvalsh(F).min()
-    print('min_eig', min_eig)
 
     if inject_gap:
         n_chunks = 25 * 4

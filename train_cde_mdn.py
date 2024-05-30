@@ -50,7 +50,7 @@ if __name__ == '__main__':
     # Load data
     accelerator.print(f'Loading Data: {args.dataset}')
     X, Y, F = utils.get_data(args.dataset, fisher=True)
-    n_sample = 10
+    n_sample = 1024
     
     mean_y = torch.mean(Y, axis=0)
     std_y = torch.std(Y, axis=0)
@@ -151,13 +151,13 @@ if __name__ == '__main__':
                     model.train()
         
         # change dataset
-        args.dataset = utils.get_next_dataset(args.dataset)
+        # args.dataset = utils.get_next_dataset(args.dataset)
         
         accelerator.print(f'Loading Data: {args.dataset}')
         X, Y, F = utils.get_data(args.dataset, fisher=True)
 
         # CDE interpolation with log_sig
-        train_logsig, train_coeffs = utils.get_CDE_logsig_coeffs(X, depth, window_length)
+        train_logsig, train_coeffs = utils.get_CDE_logsig_coeffs(X[:train_size], depth, window_length)
 
         train_dataset = torch.utils.data.TensorDataset(train_coeffs, Y[:train_size], F[:train_size])
         train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
