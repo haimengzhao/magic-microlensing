@@ -9,12 +9,29 @@ from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import AnchoredText
 import MulensModel as mm
+from model.kl_gmm import kl_upper_bound_GMM
 
 import h5py
 import torchcde
 import argparse
 
-def mdn_loss_fisher(pi, normal, y, fisher, n_sample=1024):
+def get_parser():
+    parser = argparse.ArgumentParser('Estimator')
+    parser.add_argument('--niters', type=int, default=500)
+    parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
+    parser.add_argument('-b', '--batch-size', type=int, default=128)
+    parser.add_argument('--dataset', type=str, default='/work/hmzhao/data/data-0.h5', help="Path for dataset")
+    parser.add_argument('--save', type=str, default='/work/hmzhao/training_ckpt', help="Path for save checkpoints")
+    parser.add_argument('--name', type=str, default='test', help="Name of the experiment")
+    parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
+    parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
+    parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
+    parser.add_argument('-ng', '--ngaussians', type=int, default=12, help="Number of Gaussians in mixture density network")
+    parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the latent state")
+
+    return parser
+
+def mdn_loss_fisher(pi, normal, y, fisher, n_sample=4096, sample=True):
     """Calculate MDN loss function given the fisher matrix that induce a Gaussian distribution around y.
 
     Args:
@@ -23,35 +40,44 @@ def mdn_loss_fisher(pi, normal, y, fisher, n_sample=1024):
         y (tensor): target, i.e. the ground truth parameters.
         fisher (tensor): Fisher information matrix.
         n_sample (int, optional): number of samples to estimate the loss. Defaults to 1024.
+        sample (bool, optional): whether to compute loss via Monte Carlo sampling. Defaults to True.
 
     Returns:
         loss (tensor): loss averaged on a batch of data.
     """
-    # sample from the Gaussian distribution induced by the fisher matrix
-    # check positive definite
-    # min_eig = torch.linalg.eigvalsh(fisher).min()
-    # print('min_eig of fisher', min_eig)
-    
-    # WATCH OUT: manually calculating covariance matrix
-    # directly using precision matrix with very large entries 
-    # will result in negative eigenvalues when calculating covariance 
-    # matrix due to numerical instability
-    # Adding a too large shift to cov will lead
-    # to large loss because of larger spread of the Gaussian
-    
-    cov = torch.linalg.inv(fisher)
-    min_eig = torch.linalg.eigvalsh(cov).min()
-    cov += torch.eye(cov.shape[-1], device=cov.device) * (-min_eig + 1e-6)
-    # print(cov.mean)
-    # min_eig = torch.linalg.eigvalsh(cov).min()
-    # print('min_eig of cov', min_eig)
-    dist_fisher = torch.distributions.MultivariateNormal(y, covariance_matrix=cov)
-    y_sample = dist_fisher.sample((n_sample,)) # (n_sample, batch_size, n_parameters)
-    # duplicate the mixture weights and Gaussians
-    loglik = normal.log_prob(y_sample.unsqueeze(2).expand_as(torch.tile(normal.loc.unsqueeze(0), (n_sample, 1, 1, 1))))
-    loglik = torch.sum(loglik, dim=-1)
-    loss = -torch.logsumexp(torch.log(pi.probs) + loglik, dim=-1)
-    return loss.mean()
+    if sample:
+        # sample from the Gaussian distribution induced by the fisher matrix
+        
+        # WATCH OUT: manually calculating covariance matrix!
+        # Directly using precision matrix with very large entries 
+        # will result in negative eigenvalues when calculating covariance 
+        # matrix due to numerical instability
+        # Adding a too large shift to cov will lead
+        # to large loss because of larger spread of the Gaussian
+        # check positive definite
+        cov = torch.linalg.inv(fisher)
+        min_eig = torch.linalg.eigvalsh(cov).min()
+        cov += torch.eye(cov.shape[-1], device=cov.device) * (-min_eig + 1e-6)
+        # print(cov.mean)
+        # min_eig = torch.linalg.eigvalsh(cov).min()
+        # print('min_eig of cov', min_eig)
+        
+        dist_fisher = torch.distributions.MultivariateNormal(y, covariance_matrix=cov)
+        y_sample = dist_fisher.sample((n_sample,)) # (n_sample, batch_size, n_parameters)
+        # duplicate the mixture weights and Gaussians
+        loglik = normal.log_prob(y_sample.unsqueeze(2).expand_as(torch.tile(normal.loc.unsqueeze(0), (n_sample, 1, 1, 1))))
+        loglik = torch.sum(loglik, dim=-1)
+        loss = -torch.logsumexp(torch.log(pi.probs) + loglik, dim=-1)
+        return loss.mean()
+    else:
+        # use KL divergence upper bound for Gaussian Mixtures
+        mean = normal.loc
+        std = normal.scale
+        cov = torch.diag_embed(std**2)
+        precision = torch.linalg.inv(cov)
+        weight = pi.probs
+        kl = kl_upper_bound_GMM(y, fisher, weight, mean, precision)
+        return kl.mean()
 
 def mdn_loss(pi, normal, y):
     """Calculate MDN loss function.
@@ -81,22 +107,6 @@ def sample(pi, normal):
     """
     samples = torch.sum(pi.sample().unsqueeze(2) * normal.sample(), dim=1)
     return samples
-
-def get_parser():
-    parser = argparse.ArgumentParser('Estimator')
-    parser.add_argument('--niters', type=int, default=50)
-    parser.add_argument('--lr',  type=float, default=1e-4, help="Starting learning rate")
-    parser.add_argument('-b', '--batch-size', type=int, default=128)
-    parser.add_argument('--dataset', type=str, default='/work/hmzhao/data/data-0.h5', help="Path for dataset")
-    parser.add_argument('--save', type=str, default='/work/hmzhao/training_ckpt', help="Path for save checkpoints")
-    parser.add_argument('--name', type=str, default='test', help="Name of the experiment")
-    parser.add_argument('--load', type=str, default=None, help="ID of the experiment to load for evaluation. If None, run a new experiment.")
-    parser.add_argument('--resume', type=int, default=0, help="Epoch to resume.")
-    parser.add_argument('-r', '--random-seed', type=int, default=42, help="Random_seed")
-    parser.add_argument('-ng', '--ngaussians', type=int, default=12, help="Number of Gaussians in mixture density network")
-    parser.add_argument('-l', '--latents', type=int, default=32, help="Dim of the latent state")
-
-    return parser
 
 def get_next_dataset(data_path):
     if os.path.exists(data_path[:-4] + str((int(data_path[-4])+1)) + '.h5'):

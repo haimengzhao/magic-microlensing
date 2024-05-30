@@ -50,7 +50,7 @@ if __name__ == '__main__':
     # Load data
     accelerator.print(f'Loading Data: {args.dataset}')
     X, Y, F = utils.get_data(args.dataset, fisher=True)
-    n_sample = 1024
+    n_sample = 4096
     
     mean_y = torch.mean(Y, axis=0)
     std_y = torch.std(Y, axis=0)
@@ -151,7 +151,7 @@ if __name__ == '__main__':
                     model.train()
         
         # change dataset
-        # args.dataset = utils.get_next_dataset(args.dataset)
+        args.dataset = utils.get_next_dataset(args.dataset)
         
         accelerator.print(f'Loading Data: {args.dataset}')
         X, Y, F = utils.get_data(args.dataset, fisher=True)
